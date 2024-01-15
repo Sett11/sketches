@@ -1,9 +1,3 @@
-import requests
-
-s=requests.get('https://stepik.org/media/attachments/course67/3.6.3/699991.txt')
-
-while True:
-    if s.text.startswith('We'):
-        print(s.text)
-        break
-    s=requests.get('https://stepik.org/media/attachments/course67/3.6.3/'+s.text)
+a,b,c,d=input(),input(),input(),input()
+o,w={a[i]:b[i] for i in range(len(a))},{b[i]:a[i] for i in range(len(a))}
+print(''.join(o[i] for i in c),''.join(w[i] for i in d),sep='\n')
