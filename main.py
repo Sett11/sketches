@@ -1,3 +1,10 @@
-closest_mod_5=lambda x:next(i for i in range(x,int(1e9)) if i%5==0)
+n,k=map(int,input().split())
 
-print(closest_mod_5(5))
+def f(a,b):
+    if b==0:
+        return 1
+    if a<b:
+        return 0
+    return f(a-1,b)+f(a-1,b-1)
+
+print(f(n,k))
