@@ -1,5 +1,3 @@
-a=[]
-def f(x,y):
-    a.append(1)
-f(a.append(2),a.append(3))
-print(a)
+closest_mod_5=lambda x:next(i for i in range(x,int(1e9)) if i%5==0)
+
+print(closest_mod_5(5))
