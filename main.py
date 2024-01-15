@@ -1,7 +1,5 @@
-objects,s,r=[1, 2, 1, 2, 3],set(),0
-for i in objects:
-    n=id(i)
-    if n not in s:
-        s.add(n)
-        r+=1
-print(r)
+a=[]
+def f(x,y):
+    a.append(1)
+f(a.append(2),a.append(3))
+print(a)
