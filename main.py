@@ -1,13 +1,3 @@
-class NonPositiveError(Exception):
-    pass
+import datetime
 
-class PositiveList(list):
-    def append(self,x):
-        if x>0:
-            self+=[x]
-        else:
-            raise NonPositiveError()
-
-p=PositiveList()
-p.append(1)
-p.append(-1)
+print(*map(int,str(datetime.date(*map(int,input().split()))+datetime.timedelta(int(input()))).split('-')))
