@@ -1,16 +1,15 @@
-class ExtendedStack(list):
-    def sum(self):
-        self.append(self.pop()+self.pop())
-    def sub(self):
-        self.append(self.pop()-self.pop())
-    def mul(self):
-        self.append(self.pop()*self.pop())
-    def div(self):
-        self.append(self.pop()//self.pop())
+import time
 
-a=ExtendedStack()
-a.append(1)
-a.extend([2,3,4])
-print(a)
-a.mul()
-print(a)
+class Loggable:
+    def log(self, msg):
+        print(str(time.ctime()) + ": " + str(msg))
+
+class LoggableList(list,Loggable):
+    def append(self,x):
+        self+=[x]
+        super(LoggableList,self).log(x)
+        
+l=LoggableList()
+l.append(1)
+l.append(7)
+print(l)
