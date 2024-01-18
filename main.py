@@ -1,11 +1,8 @@
-import os
+def mod_checker(x,mod=0):
+    f=lambda y:y%x==mod
+    return f
 
-r=[]
+mod_3=mod_checker(3)
 
-for i,_,k in os.walk('.'):
-    if any(p.endswith('.py') for p in k):
-        r.append(i[2:])
-
-with open('solve.txt','w') as w:
-    for i in sorted(r):
-        w.write(i+'\n')
+print(mod_3(3))
+print(mod_3(4))
