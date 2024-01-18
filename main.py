@@ -1,12 +1,35 @@
-from simplecrypt import decrypt, encrypt
+class multifilter:
+    def judge_half(pos,neg):
+        return pos>=neg
 
-with open('encrypted.bin', 'rb') as inp:
-    encrypted = inp.read()
-    with open('passwords.txt', 'r') as passwd:
-        for line in passwd:
-            try:
-                output = decrypt(line.strip(), encrypted)
-            except Exception:
-                print(line.strip(), " - неправильный пароль")
-            else:
-                print(line.strip(), '- правильный пароль. Текст:', output.decode('utf8'))
+    def judge_any(pos,neg):
+        return pos
+
+    def judge_all(pos,neg):
+        return not neg
+
+    def __init__(self, iterable, *funcs, judge=judge_any):
+        self.iterable=iterable
+        self.funcs=funcs
+        self.judge=judge
+
+    def __iter__(self):
+        r=[]
+        for i in self.iterable:
+            t=[j(i) for j in self.funcs]
+            if self.judge(t.count(True),t.count(False)):
+                r.append(i)
+        return (i for i in r)
+
+def mul2(x):
+    return x % 2 == 0
+
+def mul3(x):
+    return x % 3 == 0
+
+def mul5(x):
+    return x % 5 == 0
+
+a = [i for i in range(31)]
+
+print(list(multifilter(a, mul2, mul3, mul5,judge=multifilter.judge_all))) 
