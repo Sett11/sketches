@@ -1,17 +1,14 @@
-a,b,c=input(),input(),input()
+a, b = input(), input()
 
-def f(a,b,c):
+
+def f(a, b):
     if b not in a:
         return 0
-    if b==c:
-        return 'Impossible'
-    i=0
-    while b in a:
-        if i>=1000:
-            return 'Impossible'
-        a=a.replace(b,c)
-        i+=1
-    return i
-    
+    r, i = 0, a.find(b)
+    while i != -1:
+        i = a.find(b, i + 1)
+        r += 1
+    return r
 
-print(f(a,b,c))
+
+print(f(a, b))
