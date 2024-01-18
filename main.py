@@ -1,8 +1,17 @@
-def mod_checker(x,mod=0):
-    f=lambda y:y%x==mod
-    return f
+a,b,c=input(),input(),input()
 
-mod_3=mod_checker(3)
+def f(a,b,c):
+    if b not in a:
+        return 0
+    if b==c:
+        return 'Impossible'
+    i=0
+    while b in a:
+        if i>=1000:
+            return 'Impossible'
+        a=a.replace(b,c)
+        i+=1
+    return i
+    
 
-print(mod_3(3))
-print(mod_3(4))
+print(f(a,b,c))
