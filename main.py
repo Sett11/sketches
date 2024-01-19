@@ -1,17 +1,35 @@
-import csv
+# graph = [{"name": "B", "parents": ["A", "C", "D"]},
+#          {"name": "C", "parents": ["A"]},
+#          {"name": "A", "parents": []},
+#          {"name": "D", "parents": ["A", "E"]},
+#          {"name": "E", "parents": ["F", "G"]},
+#          {"name": "F", "parents": []},
+#          {"name": "G", "parents": ["F"]}]
+# d=[{"name": "A", "parents": []}, {"name": "B", "parents": ["A", "C"]}, {"name": "C", "parents": ["A"]}]
 
-r,o,c=[],{},0
+from json import loads
+def gen_graph(a):
+    d={i['name']:{'parents':i['parents'],'children':[]} for i in a}
+    for i in range(len(a)):
+        for j in a[i]['parents']:
+            d[j]['children'].append(a[i]['name'])
+    return d,[i for i in d]
 
-with open('Crimes.csv','r') as s:
-    r=list(csv.reader(s))
+a,b=gen_graph(loads(input()))
 
-for i in r:
-    j=i[2].split()
-    if j[0].split('/')[-1]=='2015':
-        if i[5] not in o:
-            o[i[5]]=1
-        else:
-            o[i[5]]+=1
-        c=max(c,o.get(i[5]))
+def count(g,x,q):
+    if not g[x]['children']:
+        return q
+    for i in g[x]['children']:
+        q.append(i)
+        count(g,i,q)
+    return q
 
-print([i for i in o if o[i]==c][0])
+def f(a,b):
+    r=[]
+    for i in b:
+        r.append((i,len(set(count(a,i,[])))+1))
+    return sorted(r)
+
+for i in f(a,b):
+    print(f'{i[0]} : {i[1]}')
