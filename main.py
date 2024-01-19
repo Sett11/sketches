@@ -1,11 +1,17 @@
-from re import findall
-from requests import get
+import csv
 
-s,r=input(),set()
-reg=r'(<a.*href=[\'"])(\w+://)?(\w[a-zA0-9.-]+)'
-q=get(s.strip()).text
-a=findall(reg,q)
-for i in a:
-    r.add(i[2])
-for i in sorted(r):
-    print(i)
+r,o,c=[],{},0
+
+with open('Crimes.csv','r') as s:
+    r=list(csv.reader(s))
+
+for i in r:
+    j=i[2].split()
+    if j[0].split('/')[-1]=='2015':
+        if i[5] not in o:
+            o[i[5]]=1
+        else:
+            o[i[5]]+=1
+        c=max(c,o.get(i[5]))
+
+print([i for i in o if o[i]==c][0])
