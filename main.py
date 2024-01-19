@@ -1,11 +1,11 @@
+from re import findall
 from requests import get
-from re import findall,search
 
-a,b=input(),input()
-c=get(a).text
-v='No'
-r=findall(r'https:.+\.html',c)
-for i in r:
-    if b.replace('stepik.org','stepic.org') in search(r'https:.+\.html',get(i).text).group():
-        v='Yes'
-print(v)
+s,r=input(),set()
+reg=r'(<a.*href=[\'"])(\w+://)?(\w[a-zA0-9.-]+)'
+q=get(s.strip()).text
+a=findall(reg,q)
+for i in a:
+    r.add(i[2])
+for i in sorted(r):
+    print(i)
