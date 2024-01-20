@@ -1,16 +1,20 @@
 from requests import get
+from json import loads
 
-file=open('dataset_24476_3.txt')
-a=file.read().strip().split('\n')
-file.close()
+header={"X-Xapp-Token":"eyJhbGciOiJIUzI1NiJ9.eyJyb2xlcyI6IiIsInN1YmplY3RfYXBwbGljYXRpb24iOiI1ZjhlNDBhNC0yNjMxLTQwNGEtYTJjYi0xYmQ1MjQ4MDU0NTciLCJleHAiOjE3MDYzNTk3ODQsImlhdCI6MTcwNTc1NDk4NCwiYXVkIjoiNWY4ZTQwYTQtMjYzMS00MDRhLWEyY2ItMWJkNTI0ODA1NDU3IiwiaXNzIjoiR3Jhdml0eSIsImp0aSI6IjY1YWJjMTY4YTVlNmU5MDAwYjYwODJiYyJ9.apICD_NbaGqssVKZg23R5bb0HvItZEhQ-SrCbu7i5WM"}
 
-for i in range(len(a)):
-    res=get('http://numbersapi.com/'+a[i]+'/math').text
-    if "is a number for which we're missing a fact" in res or "is an uninteresting number" in res or "is an unremarkable number" in res:
-        a[i]='Boring'
-    else:
-        a[i]='Interesting'
+q,res=[],[]
+f=open('dataset_24476_4.txt','r',encoding='utf-8')
+q=f.read().strip().split('\n')
+f.close()
 
-with open('solution.txt','w') as w:
-    for i in range(len(a)):
-        w.write(a[i]+('\n' if i!=len(a)-1 else ''))
+for i in q:
+    r=get("https://api.artsy.net/api/artists/"+i,headers=header)
+    l=loads(r.text)
+    res.append((l['sortable_name'],l['birthday']))
+
+res.sort(key=lambda x:(x[1],-ord(x[0][0])))
+
+with open('solve.txt','w',encoding='utf-8') as s:
+    for i in res:
+        s.write(i[0]+'\n')
