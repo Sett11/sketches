@@ -1,35 +1,16 @@
-# graph = [{"name": "B", "parents": ["A", "C", "D"]},
-#          {"name": "C", "parents": ["A"]},
-#          {"name": "A", "parents": []},
-#          {"name": "D", "parents": ["A", "E"]},
-#          {"name": "E", "parents": ["F", "G"]},
-#          {"name": "F", "parents": []},
-#          {"name": "G", "parents": ["F"]}]
-# d=[{"name": "A", "parents": []}, {"name": "B", "parents": ["A", "C"]}, {"name": "C", "parents": ["A"]}]
+from requests import get
 
-from json import loads
-def gen_graph(a):
-    d={i['name']:{'parents':i['parents'],'children':[]} for i in a}
+file=open('dataset_24476_3.txt')
+a=file.read().strip().split('\n')
+file.close()
+
+for i in range(len(a)):
+    res=get('http://numbersapi.com/'+a[i]+'/math').text
+    if "is a number for which we're missing a fact" in res or "is an uninteresting number" in res or "is an unremarkable number" in res:
+        a[i]='Boring'
+    else:
+        a[i]='Interesting'
+
+with open('solution.txt','w') as w:
     for i in range(len(a)):
-        for j in a[i]['parents']:
-            d[j]['children'].append(a[i]['name'])
-    return d,[i for i in d]
-
-a,b=gen_graph(loads(input()))
-
-def count(g,x,q):
-    if not g[x]['children']:
-        return q
-    for i in g[x]['children']:
-        q.append(i)
-        count(g,i,q)
-    return q
-
-def f(a,b):
-    r=[]
-    for i in b:
-        r.append((i,len(set(count(a,i,[])))+1))
-    return sorted(r)
-
-for i in f(a,b):
-    print(f'{i[0]} : {i[1]}')
+        w.write(a[i]+('\n' if i!=len(a)-1 else ''))
