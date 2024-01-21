@@ -1,2 +1,2 @@
-a,b=int(input()),int(input())
-print(*divmod(b,a),sep='\n')
+n=int(input())
+print((n&1)+n//2)
