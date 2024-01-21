@@ -1,1 +1,2 @@
-print(f"{'не' if int(input())&1 else ''}четное".capitalize())
+a,b,c,d=map(int,input())
+print(['НЕТ','ДА'][a+d==b-c])
