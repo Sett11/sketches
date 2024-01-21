@@ -1,6 +1,6 @@
+from functools import reduce
+from operator import mul
+
 n=int(input())
-i=c=0
-while i<n:
-    i+=4
-    c+=1
-print(c)
+a=list(map(int,str(n)))
+print(f"Сумма цифр = {sum(a)}",f"Произведение цифр = {reduce(mul,a)}",sep='\n')
