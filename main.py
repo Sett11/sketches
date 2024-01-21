@@ -1,6 +1,4 @@
-from functools import reduce
-from operator import mul
+from itertools import permutations as p
 
-n=int(input())
-a=list(map(int,str(n)))
-print(f"Сумма цифр = {sum(a)}",f"Произведение цифр = {reduce(mul,a)}",sep='\n')
+n=input()
+print(*list(map(lambda x:''.join(x),p(n))),sep='\n')
