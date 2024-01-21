@@ -1,1 +1,1 @@
-print(f"Пароль {'не ' if input()!=input() else ''}принят")
+print(f"{'не' if int(input())&1 else ''}четное".capitalize())
