@@ -1,4 +1,5 @@
-from itertools import permutations as p
-
 n=input()
-print(*list(map(lambda x:''.join(x),p(n))),sep='\n')
+print(f"""Цифра в позиции тысяч равна {n[0]}
+Цифра в позиции сотен равна {n[1]}
+Цифра в позиции десятков равна {n[2]}
+Цифра в позиции единиц равна {n[3]}""")
