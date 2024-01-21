@@ -1,2 +1,6 @@
-f=lambda a,b:3*(a+b)**3+275*b**2-127*a-41
-print(f(int(input()),int(input())))
+a,b,n=int(input()),int(input()),int(input())
+def f(a,b,n):
+    if n==1:
+        return a
+    return f(a+b,b,n-1)
+print(f(a,b,n))
