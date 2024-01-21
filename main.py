@@ -1,2 +1,3 @@
-a,b,c,d=int(input()),int(input()),int(input()),int(input())
-print(a**b+c**d)
+a=int(input())
+
+print(a+int(str(a)*2)+int(str(a)*3))
