@@ -1,1 +1,2 @@
-print(['Доступ запрещен','Доступ разрешен'][int(input())>17])
+a,b,c=int(input()),int(input()),int(input())
+print(['NO','YES'][b-a==c-b])
