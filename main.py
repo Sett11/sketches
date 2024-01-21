@@ -1,2 +1,6 @@
 n=int(input())
-print((n&1)+n//2)
+i=c=0
+while i<n:
+    i+=4
+    c+=1
+print(c)
