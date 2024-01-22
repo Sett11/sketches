@@ -1,2 +1,2 @@
-s=input()
-print(['NO','YES'][all(i in s for i in ['.','@'])])
+a,b,c,d=float(input()),float(input()),float(input()),float(input())
+print(((a-c)**2+(b-d)**2)**.5)
