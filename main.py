@@ -1,2 +1,4 @@
-a,b,c=sorted(map(int,input()))
-print(f"Число {'не' if c-a!=b else ''}интересное")
+c=0
+for i in range(5):
+    c+=abs(float(input()))
+print(c)
