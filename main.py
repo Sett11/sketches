@@ -1,1 +1,2 @@
-print(sorted([int(input()),int(input()),int(input())])[1])
+from calendar import monthrange
+print(monthrange(2023,int(input()))[1])
