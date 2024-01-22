@@ -1,2 +1,2 @@
 s=input()
-print(['NO','YES'][any(i in s for i in ['суббота','воскресенье'])])
+print(['NO','YES'][all(i in s for i in ['.','@'])])
