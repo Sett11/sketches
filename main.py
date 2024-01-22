@@ -1,2 +1,2 @@
-n=int(input())
-print(['NO','YES'][(n%4==0 and n%100!=0) or (n%400==0)])
+a,b,c,d=int(input()),int(input()),int(input()),int(input())
+print(['NO','YES'][a==c or b==d])
