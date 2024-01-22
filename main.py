@@ -1,6 +1,7 @@
 from bisect import insort
 
 r=[]
-for i in range(5):
+for i in range(3):
     insort(r,int(input()))
-print(f"Наименьшее число = {r[0]}",f"Наибольшее число = {r[-1]}",sep='\n')
+    
+print(*r[::-1],sep='\n')
