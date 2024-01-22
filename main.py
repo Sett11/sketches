@@ -1,1 +1,1 @@
-print(*['AAA']*6+['BBBB']*5+['E']+['TTTTT']*9+['G'],sep='\n')
+print(*['*'*19]*int(input()),sep='\n')
