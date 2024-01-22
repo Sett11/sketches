@@ -1,4 +1,2 @@
-c=0
-for i in range(5):
-    c+=abs(float(input()))
-print(c)
+a,b,c,d=int(input()),int(input()),int(input()),int(input())
+print(abs(c-a)+abs(d-b))
