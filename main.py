@@ -1,2 +1,2 @@
 n=int(input())
-print(*[f"Квадрат числа {i} равен {i**2}" for i in range(n+1)],sep='\n')
+print(*['*'*i for i in range(1,n+1)][::-1],sep='\n')
