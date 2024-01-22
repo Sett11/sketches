@@ -1,1 +1,2 @@
-print(float(input())/(float(input())+float(input())))
+n=float(input())
+print(n**-1 if n else 'Обратного числа не существует')
