@@ -1,1 +1,1 @@
-print(float(input())*float(input())*.5)
+print(float(input())/(float(input())+float(input())))
