@@ -1,2 +1,7 @@
-n=int(input())
-print(f"{'Легкий' if n<60 else 'Первый полусредний' if n<64 else 'Полусредний'} вес")
+a,b,c=input(),input(),input()
+try:
+    print(eval(a+(c+b if c in '+-*/' else "/'aaa'")))
+except ZeroDivisionError:
+    print('На ноль делить нельзя!')
+except TypeError:
+    print('Неверная операция')
