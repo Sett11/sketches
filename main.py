@@ -1,1 +1,2 @@
-print(f"Hello {input()} {input()}! You have just delved into Python")
+s=input()
+print(f"Футбольная команда {s} имеет длину {len(s)} символов")
