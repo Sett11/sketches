@@ -1,1 +1,1 @@
-print({1:'Равносторонний',2:'Равнобедренный',3:'Разносторонний'}[len(set([int(input()),int(input()),int(input())]))])
+print(sorted([int(input()),int(input()),int(input())])[1])
