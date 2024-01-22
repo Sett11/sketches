@@ -1,2 +1,2 @@
 n=int(input())
-print(['Не принадлежит','Принадлежит'][-30<n<-1 or 7<n<26])
+print(['NO','YES'][len(str(n))==4 and any(n%i==0 for i in [7,17])])
