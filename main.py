@@ -1,2 +1,2 @@
-n=int(input())
-print(['NO','YES'][len(str(n))==4 and any(n%i==0 for i in [7,17])])
+a,b,c=int(input()),int(input()),int(input())
+print(['NO','YES'][a+b>c and a+c>b and b+c>a])
