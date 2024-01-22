@@ -1,1 +1,1 @@
-print(*['Python is awesome!']*10,sep='\n')
+print(*[input()]*int(input()),sep='\n')
