@@ -1,4 +1,4 @@
-from math import sin,cos,tan,pi,radians
+from math import ceil,floor
 
-n=radians(float(input()))
-print(sin(n)+cos(n)+tan(n)**2)
+n=float(input())
+print(floor(n)+ceil(n))
