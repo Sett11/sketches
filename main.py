@@ -1,1 +1,1 @@
-print(*[input()]*int(input()),sep='\n')
+print(*['AAA']*6+['BBBB']*5+['E']+['TTTTT']*9+['G'],sep='\n')
