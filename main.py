@@ -1,2 +1,1 @@
-n=int(input())
-print(*[f'{n} x {i} = {n*i}' for i in range(1,11)],sep='\n')
+print(len([i for i in range(int(input()),int(input())+1) if str(i**3)[-1] in '49']))
