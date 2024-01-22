@@ -1,2 +1,2 @@
-a=sorted([input(),input(),input()],key=len)
-print(a[0],a[-1],sep='\n')
+a,b,c=sorted(map(lambda x:len(x),[input(),input(),input()]))
+print(['NO','YES'][c-b==b-a])
