@@ -1,2 +1,1 @@
-n=float(input())
-print(n**-1 if n else 'Обратного числа не существует')
+print(5/9*(float(input())-32))
