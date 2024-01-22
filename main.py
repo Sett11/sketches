@@ -1,7 +1,2 @@
-from bisect import insort
-
-r=[]
-for i in range(3):
-    insort(r,int(input()))
-    
-print(*r[::-1],sep='\n')
+a,b,c=sorted(map(int,input()))
+print(f"Число {'не' if c-a!=b else ''}интересное")
