@@ -1,1 +1,1 @@
-print(sum(filter(lambda x:x>=0,[int(input()),int(input()),int(input())])))
+print(['Не принадлежит','Принадлежит'][-1<int(input())<17])
