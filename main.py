@@ -1,2 +1,2 @@
-s=input()
-print(f"Футбольная команда {s} имеет длину {len(s)} символов")
+a=sorted([input(),input(),input()],key=len)
+print(a[0],a[-1],sep='\n')
