@@ -1,2 +1,1 @@
-a,b=int(input()),int(input())
-print('NO' if a>b else 'YES' if a<b else "Don't know")
+print({1:'Равносторонний',2:'Равнобедренный',3:'Разносторонний'}[len(set([int(input()),int(input()),int(input())]))])
