@@ -1,2 +1,1 @@
-a,b,c,d=int(input()),int(input()),int(input()),int(input())
-print(abs(c-a)+abs(d-b))
+print('"Python is a great language!"'+", said Fred. "+'"I don\'t ever remember having this much fun before."')
