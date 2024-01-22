@@ -1,2 +1,4 @@
-a,b,c,d=float(input()),float(input()),float(input()),float(input())
-print(((a-c)**2+(b-d)**2)**.5)
+from math import pi
+
+n=float(input())
+print(pi*n**2,2*pi*n,sep='\n')
