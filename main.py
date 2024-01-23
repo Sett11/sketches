@@ -1,1 +1,4 @@
-print(len([i for i in range(int(input()),int(input())+1) if str(i**3)[-1] in '49']))
+total=0
+for i in range(int(input())):
+    total+=int(input())
+print(total)
