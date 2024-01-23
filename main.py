@@ -1,4 +1,4 @@
-from functools import reduce
-from operator import mul
+n=int(input())
 
-print(reduce(mul,map(int,input())))
+for i in range(n):
+    print(*[n]*3)
