@@ -1,1 +1,4 @@
-print(input()[0])
+from functools import reduce
+from operator import mul
+
+print(reduce(mul,map(int,input())))
