@@ -1,2 +1,2 @@
-s=input()
-print(['NO','YES'][s==''.join(sorted(s,reverse=True))])
+n=int(input())
+print(next(i for i in range(2,n+1) if n%i==0))
