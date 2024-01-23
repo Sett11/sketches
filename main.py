@@ -1,8 +1,8 @@
-product=1
+n=int(input())
 
-for i in range(10):
-    n=int(input())
-    if n:
-        product*=n
+def f(n):
+    a=[1,n]
+    a+=sum([[i,n//i] for i in range(2,int(n**.5+1)) if n%i==0],[])
+    return sum(set(a))
 
-print(product)
+print(f(n))
