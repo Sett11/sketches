@@ -1,5 +1,4 @@
-s,c=input(),0
-while s not in ['стоп','хватит','достаточно']:
-    c+=1
-    s=input()
-print(c)
+n=int(input())
+while n%7==0:
+    print(n)
+    n=int(input())
