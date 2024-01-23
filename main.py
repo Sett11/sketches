@@ -1,8 +1,7 @@
-n=int(input())
+total,c=1,'-'
 
-def f(n):
-    a=[1,n]
-    a+=sum([[i,n//i] for i in range(2,int(n**.5+1)) if n%i==0],[])
-    return sum(set(a))
+for i in range(2,int(input())+1):
+    total=total-i if c=='-' else total+i
+    c='+' if c=='-' else '-'
 
-print(f(n))
+print(total)
