@@ -1,2 +1,1 @@
-n=int(input())
-print(next(i for i in range(2,n+1) if n%i==0))
+print(*[i for i in range(1,int(input())+1) if (i<5 or i>9) and (i<17 or i>37) and (i<78 or i>87)],sep='\n')
