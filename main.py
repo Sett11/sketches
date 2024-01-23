@@ -1,4 +1,4 @@
 s=input()
-while s!='КОНЕЦ':
+while s.lower()!='конец':
     print(s)
     s=input()
