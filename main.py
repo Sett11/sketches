@@ -1,10 +1,12 @@
-product,count=1,0
+mx = -10e7
+s = 0
 for i in range(10):
-    n=int(input())
-    if n>=0:
-        product*=n
-        count+=1
-if count>0:
-    print(count,product,sep='\n')
+    x = int(input())
+    if x < 0:
+        s += x
+        if x > mx:
+            mx = max(x,mx)
+if s:
+    print(s,mx,sep='\n')
 else:
     print('NO')
