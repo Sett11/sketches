@@ -1,1 +1,1 @@
-print(*list(input())[::-1],sep='\n')
+print(input()[::-1])
