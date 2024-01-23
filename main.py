@@ -1,2 +1,1 @@
-a=['*'*i for i in range(1,int(input())//2+2)]
-print(*(a+a[::-1][1:]),sep='\n')
+print(*[str(i)*i for i in range(1,int(input())+1)],sep='\n')
