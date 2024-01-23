@@ -1,1 +1,10 @@
-print(*[i for i in range(1,int(input())+1) if (i<5 or i>9) and (i<17 or i>37) and (i<78 or i>87)],sep='\n')
+product,count=1,0
+for i in range(10):
+    n=int(input())
+    if n>=0:
+        product*=n
+        count+=1
+if count>0:
+    print(count,product,sep='\n')
+else:
+    print('NO')
