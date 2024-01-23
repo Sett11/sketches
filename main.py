@@ -1,6 +1,7 @@
-n,t=int(input()),0
-while n>0 and n<=5:
-    if n==5:
-        t+=1
-    n=int(input())
-print(t)
+n,c=int(input()),0
+d=[25,10,5,1]
+for i in d:
+    a,b=divmod(n,i)
+    c+=a
+    n=b
+print(c)
