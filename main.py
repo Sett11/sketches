@@ -1,3 +1,8 @@
-f=lambda x:1 if x==1 else x*f(x-1)
+product=1
 
-print(f(int(input())))
+for i in range(10):
+    n=int(input())
+    if n:
+        product*=n
+
+print(product)
