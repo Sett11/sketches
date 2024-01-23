@@ -1,1 +1,1 @@
-print(input()[1])
+print(['NO','YES'][len(set(input()))==1])
