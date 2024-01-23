@@ -1,4 +1,5 @@
-s=input()
-while s.lower()!='конец':
-    print(s)
+s,c=input(),0
+while s not in ['стоп','хватит','достаточно']:
+    c+=1
     s=input()
+print(c)
