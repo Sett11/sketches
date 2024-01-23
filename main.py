@@ -1,8 +1,1 @@
-from bisect import insort
-
-r=[]
-
-for i in range(int(input())):
-    insort(r,int(input()))
-
-print(*r[-2:][::-1],sep='\n')
+print(['NO','YES'][all(int(input())%2==0 for _ in range(10))])
