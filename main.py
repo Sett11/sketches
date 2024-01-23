@@ -1,6 +1,5 @@
-s = 0
-for _ in range(7):
-    n = int(input())
-    if n % 2 == 0:
-        s+=n
-print(s)
+a=sorted(map(int,input()),reverse=True)
+try:
+    print(next(i for i in a if i%3==0))
+except StopIteration:
+    print('NO')
