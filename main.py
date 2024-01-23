@@ -1,1 +1,3 @@
-print(sum(i for i in range(1,int(input())+1) if str(i**2)[-1] in '258'))
+f=lambda x:1 if x==1 else x*f(x-1)
+
+print(f(int(input())))
