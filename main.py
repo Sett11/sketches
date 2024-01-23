@@ -1,4 +1,4 @@
 n=int(input())
 
-for i in range(n):
-    print(*[n]*3)
+for i in range(1,n+1):
+    print(*[i]*5)
