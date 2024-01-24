@@ -1,9 +1,9 @@
-n = 8
+n = 4
 count = 0
-maximum = 10e12+1
-for i in range(1, n + 1):
+maximum = -10e9
+for i in range(n):
     x = int(input())
-    if x % 4 == 0:
+    if x&1:
         count += 1
         if x > maximum:
             maximum = x
