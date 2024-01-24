@@ -1,7 +1,14 @@
-n = int(input())
-s = 0
-while n:
-    if n % 2 == 0:
-        s += n % 10
-    n //= 10
-print(s)
+n = 8
+count = 0
+maximum = 10e12+1
+for i in range(1, n + 1):
+    x = int(input())
+    if x % 4 == 0:
+        count += 1
+        if x > maximum:
+            maximum = x
+if count > 0:
+    print(count)
+    print(maximum)
+else:
+    print('NO')
