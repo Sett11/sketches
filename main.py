@@ -1,3 +1,3 @@
-f=lambda x:x if len(str(x))==1 else f(sum(map(int,str(x))))
+from math import factorial as f
 
-print(f(int(input())))
+print(sum(f(i) for i in range(1,int(input())+1)))
