@@ -1,3 +1,3 @@
-from math import factorial as f
+f=lambda x:all(x%i for i in range(2,int(x**.5+1))) and x>=2
 
-print(sum(f(i) for i in range(1,int(input())+1)))
+print(*[i for i in range(int(input()),int(input())+1) if f(i)],sep='\n')
