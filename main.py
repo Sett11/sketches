@@ -1,1 +1,1 @@
-print(['НЕТ','ДА'][all(0<=int(i)<=255 for i in input().split('.'))])
+print(*input(),sep=input())
