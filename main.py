@@ -1,1 +1,1 @@
-print(len([i for i in input() if i.islower()]))
+print(len(input().split()))
