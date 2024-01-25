@@ -1,1 +1,1 @@
-print(*input().split('\\'),sep='\n')
+print(*map(lambda x:'+'*int(x),input().split()),sep='\n')
