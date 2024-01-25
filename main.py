@@ -1,1 +1,1 @@
-print(sum(map(int,input())))
+print(['Цифр нет', 'Цифра'][any(i.isdigit() for i in input())])
