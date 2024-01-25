@@ -1,1 +1,1 @@
-print(*input().split(),sep='\n')
+print(*map(lambda x:x[0],input().split()),sep='.',end='.')
