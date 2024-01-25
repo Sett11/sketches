@@ -1,2 +1,1 @@
-s=input()
-print(s[:s.find('h')]+s[s.rfind('h')+1:])
+print(*[chr(i) for i in range(int(input()),int(input())+1)])
