@@ -1,1 +1,1 @@
-print(*map(lambda x:'+'*int(x),input().split()),sep='\n')
+print(['НЕТ','ДА'][all(0<=int(i)<=255 for i in input().split('.'))])
