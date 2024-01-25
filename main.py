@@ -1,3 +1,2 @@
-from collections import Counter
-
-print(max(map(lambda x:(x[1],x[0]),Counter(input()).items()))[1])
+s=input()
+print('NO' if 'f' not in s else s.find('f') if s.count('f')==1 else ' '.join([str(s.find('f')),str(s.rfind('f'))]))
