@@ -1,2 +1,1 @@
-n=int(input())
-print([input() for _ in range(n)])
+print([chr(i)*(i-96) for i in range(97,123)])
