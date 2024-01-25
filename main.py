@@ -1,3 +1,2 @@
-n=int(input())
-a=[int(input()) for i in range(n)]
-print([j for i,j in enumerate(a) if i%2==0])
+from itertools import zip_longest
+print(*list(zip_longest(*[input() for _ in range(int(input()))],fillvalue=''))[int(input())-1],sep='')
