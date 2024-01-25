@@ -1,2 +1,5 @@
-a,b=[input() for _ in range(int(input()))],[input() for _ in range(int(input()))]
-print(*filter(lambda x:all(i.lower() in x.lower() for i in b),a),sep='\n')
+a,b,c=[],[],[]
+for i in range(int(input())):
+    n=int(input())
+    a.append(n) if n<0 else c.append(n) if n>0 else b.append(n)
+print(*(a+b+c),sep='\n')
