@@ -1,1 +1,1 @@
-print(['NO','YES']['хорош' in input().lower()])
+print(len([i for i in input() if i.islower()]))
