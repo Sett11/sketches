@@ -1,1 +1,2 @@
-print([chr(i)*(i-96) for i in range(97,123)])
+n=int(input())
+print([int(input())**3 for i in range(n)])
