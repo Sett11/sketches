@@ -1,1 +1,1 @@
-print(input().swapcase())
+print(['NO','YES']['хорош' in input().lower()])
