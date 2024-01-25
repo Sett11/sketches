@@ -1,4 +1,7 @@
-from collections import Counter
+c=0
 
-c=Counter(input().lower())
-print(f"Аденин: {c['а']}",f"Гуанин: {c['г']}",f"Цитозин: {c['ц']}",f"Тимин: {c['т']}",sep='\n')
+for i in range(int(input())):
+    if input().count('11')>=3:
+        c+=1
+
+print(c)
