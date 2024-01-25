@@ -1,2 +1,3 @@
 n=int(input())
-print([i for i in range(1,n+1) if n%i==0])
+a=[int(input()) for i in range(n)]
+print([a[i]+a[i+1] for i in range(len(a)-1)])
