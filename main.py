@@ -1,1 +1,2 @@
-print(['Цифр нет', 'Цифра'][any(i.isdigit() for i in input())])
+s=input()
+print(f"Символ + встречается {s.count('+')} раз",f"Символ * встречается {s.count('*')} раз",sep='\n')
