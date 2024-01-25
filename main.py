@@ -1,1 +1,1 @@
-print(*input()[0:100:2],sep='\n')
+print(*input()[::-1],sep='\n')
