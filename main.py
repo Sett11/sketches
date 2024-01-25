@@ -1,1 +1,1 @@
-print(*[chr(i) for i in range(int(input()),int(input())+1)])
+print(*[ord(i) for i in input()])
