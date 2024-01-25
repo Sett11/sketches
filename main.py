@@ -1,2 +1,3 @@
-a=[i for i,j in enumerate(input()) if j=='f']
-print(a[1] if len(a)>1 else -1 if len(a)==1 else -2)
+s=input()
+a,b=s.find('h'),s.rfind('h')
+print(s[:a+1]+s[a+1:b][::-1]+s[b:])
