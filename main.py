@@ -1,5 +1,9 @@
-c,s=0,input()
-for i in range(len(s)-1):
-    if s[i]==s[i+1]:
-        c+=1
-print(c)
+s1,s2,c1,c2,w='ауоыиэяюе','бвгджзйклмнпрстфхцчшщ',0,0,input().lower()
+
+for i in w:
+    if i in s1:
+        c1+=1
+    if i in s2:
+        c2+=1
+
+print(f"Количество гласных букв равно {c1}",f"Количество согласных букв равно {c2}",sep='\n')
