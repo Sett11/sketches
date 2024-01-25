@@ -1,2 +1,3 @@
 s=input()
-print(s[2],s[-2],s[:5],s[:-2],s[::2],s[1::2],s[::-1],s[::-1][::2],sep='\n')
+n=len(s)
+print(s[-n//2+(1 if n&1 else 0):]+s[:-n//2+(1 if n&1 else 0)])
