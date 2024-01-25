@@ -1,3 +1,3 @@
-from collections import OrderedDict
-
-print(*OrderedDict().fromkeys([input() for _ in range(int(input()))]).keys(),sep='\n')
+a=[input() for _ in range(int(input()))]
+c=input().lower()
+print(*filter(lambda x:c in x.lower(),a),sep='\n')
