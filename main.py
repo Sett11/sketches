@@ -1,1 +1,17 @@
-print(*map(lambda x:x[1:]+x[0]+'ки',input().split()))
+def draw_box():
+    return """**********
+*        *
+*        *
+*        *
+*        *
+*        *
+*        *
+*        *
+*        *
+*        *
+*        *
+*        *
+*        *
+**********"""
+
+print(draw_box())
