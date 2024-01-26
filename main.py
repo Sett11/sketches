@@ -1,1 +1,3 @@
-print(*[input().split('#')[0].rstrip() for i in range(int(input()[1:]))],sep='\n')
+a=sorted(map(int,input().split()))
+print(*a)
+print(*a[::-1])
