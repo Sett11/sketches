@@ -1,1 +1,1 @@
-print(*input().split(),sep='\n')
+print(*filter(lambda x:x.isdigit(),input()),sep='')
