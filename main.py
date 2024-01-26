@@ -1,1 +1,1 @@
-print(max(map(len,input().split())))
+print(*map(lambda x:x[1:]+x[0]+'ки',input().split()))
