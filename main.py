@@ -1,1 +1,1 @@
-print(*map(lambda x:int(x)**3,input().split()))
+print(*input().split(),sep='\n')
