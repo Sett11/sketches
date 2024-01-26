@@ -1,1 +1,2 @@
-print([i for i in range(2,int(input())+1,2)])
+a,b=input().split(),input().split()
+print(*[int(a[i])+int(b[i]) for i in range(len(a))])
