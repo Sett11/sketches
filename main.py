@@ -1,2 +1,3 @@
-a,b=input().split(),input().split()
-print(*[int(a[i])+int(b[i]) for i in range(len(a))])
+a=input().split()
+b='+'.join(a)
+print(f'{b}={eval(b)}')
