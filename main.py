@@ -1,1 +1,1 @@
-print("Общее количество артиклей:",len(list(filter(lambda x:x.lower() in ['a','an','the'],input().split()))))
+print(*[input().split('#')[0].rstrip() for i in range(int(input()[1:]))],sep='\n')
