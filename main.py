@@ -1,1 +1,1 @@
-print(*[i**2 for i in range(1,int(input())+1)],sep='\n')
+print(*map(lambda x:int(x)**3,input().split()))
