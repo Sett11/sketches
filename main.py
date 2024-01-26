@@ -1,10 +1,5 @@
-def draw_triangle(q,k):
-    n=k//2+(1 if k&1 else 0)
-    a=[q*i for i in range(1,n+1)]
-    a+=a[::-1][1:]
-    return '\n'.join(a)
+def print_fio(a, b, c):
+    return (b[0]+a[0]+c[0]).upper()
 
-fill = input()
-base = int(input())
-
-print(draw_triangle(fill, base))
+name, surname, patronymic = input(), input(), input()
+print(print_fio(name, surname, patronymic))
