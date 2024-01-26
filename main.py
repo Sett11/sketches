@@ -1,3 +1,1 @@
-a=sorted(map(int,input().split()))
-print(*a)
-print(*a[::-1])
+print([i for i in range(100,1001) if str(i)==str(i)[::-1]])
