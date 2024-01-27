@@ -1,13 +1,3 @@
-from collections import deque
+from re import sub
 
-def f(s):
-    q=deque()
-    for i in s:
-        if i=='(':
-            q.append(i)
-        else:
-            if not q or q.pop()+i!='()':
-                return 1==2
-    return not q
-
-print(f(input()))
+print(sub(r'[A-Z]',lambda s:'_'+s.group().lower(),input())[1:])
