@@ -1,2 +1,4 @@
-a,b,c=input().split('.')
-print(int(a)*int(b)==int(c[-2:]))
+from string import ascii_lowercase as a
+
+s=input().lower()
+print(all(i in s for i in a))
