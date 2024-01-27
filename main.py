@@ -1,3 +1,8 @@
-from re import sub
+def get_middle_point(x1, y1, x2, y2):
+    return (x1+x2)/2,(y1+y2)/2
 
-print(sub(r'[A-Z]',lambda s:'_'+s.group().lower(),input())[1:])
+x_1, y_1 = int(input()), int(input())
+x_2, y_2 = int(input()), int(input())
+
+x, y = get_middle_point(x_1, y_1, x_2, y_2)
+print(x, y)
