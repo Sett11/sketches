@@ -1,2 +1,7 @@
-f=lambda s,e:[i for i,j in enumerate(s) if j==e]
-print(f(input(),input()))
+def f(a,b):
+    return sorted(a+b)
+
+a = [int(c) for c in input().split()]
+b = [int(c) for c in input().split()]
+
+print(f(a, b))
