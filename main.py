@@ -1,3 +1,2 @@
-f=lambda n:[i for i in range(1,n+1) if n%i==0]
-
-print(len(f(int(input()))))
+f=lambda s,e:[i for i,j in enumerate(s) if j==e]
+print(f(input(),input()))
