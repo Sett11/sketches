@@ -1,3 +1,4 @@
-f=lambda a,b:len(a)==len(b) and len([i for i,j in enumerate(a) if a[i]!=b[i]])==1
+from re import sub
 
-print(f(input(),input()))
+s=sub(r'[\s.,!?-]','',input().lower())
+print(s==s[::-1])
