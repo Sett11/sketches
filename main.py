@@ -1,4 +1,9 @@
-from string import ascii_lowercase as a
+n,c,v=int(input()),0,0
 
-s=input().lower()
-print(all(i in s for i in a))
+while n>1:
+    if n%2!=0:
+        v=1
+    n//=2
+    c+=1
+
+print(c+v)
