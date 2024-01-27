@@ -1,3 +1,12 @@
-f1=lambda n:n>1 and all(n%i for i in range(2,int(n**.5)+1))
-f2=lambda n:next(i for i in range(n+1,n+100) if f1(i))
-print(f2(int(input())))
+def f(s):
+    a=[False]*3+[len(s)>=8]
+    for i in s:
+        if i.islower():
+            a[0]=1==1
+        if i.isupper():
+            a[1]=1==1
+        if i.isdigit():
+            a[2]=1==1
+    return all(i for i in a)
+
+print(f(input()))
