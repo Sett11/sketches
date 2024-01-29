@@ -1,3 +1,9 @@
-from re import sub
+def josef(n,k):
+    k-=1
+    a,i=list(range(1,n+1)),k
+    while len(a)>1:
+        a.pop(i)
+        i=(i+k)%len(a)
+    return a[0]
 
-print(','.join(sub(r'.{3,3}',lambda x:x.group()+' ',input()[::-1]).split())[::-1])
+print(josef(int(input()),int(input())))
