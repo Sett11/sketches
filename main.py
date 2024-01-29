@@ -1,2 +1,3 @@
-s=input()
-print(int((s[0] if len(s)==6 else '')+s[-5:][::-1]))
+from re import sub
+
+print(','.join(sub(r'.{3,3}',lambda x:x.group()+' ',input()[::-1]).split())[::-1])
