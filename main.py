@@ -1,11 +1,24 @@
-a,n,v=[int(input()) for _ in range(int(input()))],int(input()),False
-for i in range(len(a)):
-    if v:
-        break
-    for j in range(i+1,len(a)):
-        if a[i]*a[j]==n:
-            print('ДА')
-            v=True
-            break
-else:
-    print('НЕТ')
+l=['камень','ножницы','бумага']
+a,b=input(),input()
+
+if a=='камень':
+    if b=='ножницы':
+        print('Тимур')
+    if b=='бумага':
+        print('Руслан')
+    if b=='камень':
+        print('ничья')
+if a=='ножницы':
+    if b=='бумага':
+        print('Тимур')
+    if b=='камень':
+        print('Руслан')
+    if b=='ножницы':
+        print('ничья')
+if a=='бумага':
+    if b=='камень':
+        print('Тимур')
+    if b=='ножницы':
+        print('Руслан')
+    if b=='бумага':
+        print('ничья')
