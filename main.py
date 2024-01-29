@@ -1,2 +1,2 @@
-n=int(input())
-print(bin(n)[2:],oct(n)[2:],hex(n)[2:].upper(),sep='\n')
+a,b=int(input()),int(input())
+print(a+b,a-b,a*b,a/b,*divmod(a,b),(a**10+b**10)**.5,sep='\n')
