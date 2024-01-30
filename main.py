@@ -1,7 +1,4 @@
-def f(s,k='anton'):
-    n,r=0,[]
-    for i in range(5):
-        n=s.find(k[i],n)
-        r.append(n)
-    return all(i!=-1 for i in r)
-print(*[j+1 for j,k in enumerate([input() for _ in range(int(input()))]) if f(k)])
+s=f"{input()} запретил букву"
+for i in list(filter(lambda e:e in s,'абвгдежзийклмнопрстуфхцчшщъыьэюя')):
+    print(s+' '+i)
+    s=' '.join(s.replace(i,'').split())
