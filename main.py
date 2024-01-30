@@ -1,9 +1,4 @@
-r=["ножницы-бумага", "бумага-камень", "камень-ящерица", "ящерица-Спок", "Спок-ножницы", "ножницы-ящерица", "ящерица-бумага", "бумага-Спок", "Спок-камень", "камень-ножницы"]
-a,b=input(),input()
-if a==b:
-    print('ничья')
+from re import sub
 
-elif a+'-'+b in r:
-    print('Тимур')
-else:
-    print('Руслан')
+s=input()
+print(max(map(int,sub(r'(.)\1*',lambda x:' '+str(len(x.group())) if x.group()[0]=='Р' else '',s).split()),default=0))
