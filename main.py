@@ -1,4 +1,9 @@
-s=f"{input()} запретил букву"
-for i in list(filter(lambda e:e in s,'абвгдежзийклмнопрстуфхцчшщъыьэюя')):
-    print(s+' '+i)
-    s=' '.join(s.replace(i,'').split())
+def func(num1, num2):
+    return num1%num2==0
+
+num1, num2 = int(input()), int(input())
+
+if func(num1, num2):
+    print('делится')
+else:
+    print('не делится')
