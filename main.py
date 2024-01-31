@@ -4,4 +4,5 @@ for i in range(n-2):
     for j in range(1,len(k)):
         t.append(k[j]+k[j-1])
     a.append(t+[1])
-print(a[n])
+for i in range(n):
+    print(*a[i])
