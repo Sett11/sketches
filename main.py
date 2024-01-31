@@ -1,7 +1,7 @@
-a,r=input().split(),[[]]
-n=len(a)
+n,m,r=int(input()),int(input()),[]
 for i in range(n):
-    for j in range(i,n+1):
-        t=a[i:j]
-        r.append(t) if t else None
-print(sorted(r,key=len))
+    t=[]
+    for j in range(m):
+        t.append(input())
+    r.append(' '.join(t))
+print(*r,sep='\n')
