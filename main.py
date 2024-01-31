@@ -1,2 +1,7 @@
-a,n=input().split(),int(input())
-print([a[i:i+n] for i in range(0,len(a),n)])
+a,r=input().split(),[[]]
+n=len(a)
+for i in range(n):
+    for j in range(i,n+1):
+        t=a[i:j]
+        r.append(t) if t else None
+print(sorted(r,key=len))
