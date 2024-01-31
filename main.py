@@ -1,5 +1,2 @@
-n,m=int(input()),int(input())
-r=list(zip(*[list(map(int,input().split())) for _ in range(n)]))
-i,j=map(int,input().split())
-r[i],r[j]=r[j],r[i]
-[print(*i) for i in list(zip(*r))]
+a=[input().split() for _ in range(int(input()))]
+print(['NO','YES'][[list(i) for i in zip(*a)]==a])
