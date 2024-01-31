@@ -1,9 +1,2 @@
-def func(num1, num2):
-    return num1%num2==0
-
-num1, num2 = int(input()), int(input())
-
-if func(num1, num2):
-    print('делится')
-else:
-    print('не делится')
+n=int(input())
+print(*[[i for i in range(1,n+1)] for _ in range(n)],sep='\n')
