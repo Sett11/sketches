@@ -1,3 +1,2 @@
-from re import sub
-
-print([list(i) for i in sub(r'(.)\1*',lambda x:' '+x.group()+' ',''.join(input().split())).split()])
+a,n=input().split(),int(input())
+print([a[i:i+n] for i in range(0,len(a),n)])
