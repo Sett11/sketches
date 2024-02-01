@@ -1,5 +1,6 @@
 n,m=map(int,input().split())
-r=list(range(1,m+1))
+a=list(range(1,n*m+1))
+r=[a[i:i+m] for i in range(0,n*m,m)]
 for i in range(n):
-    print(*r)
-    r.append(r.pop(0))
+    r[i]=' '.join(map(lambda x:str(x).ljust(3),r[i][::-1] if i&1 else r[i]))
+    print(r[i])
