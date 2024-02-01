@@ -1,1 +1,1 @@
-print(*[input() for _ in range(int(input()))][::-1],sep='\n')
+print(*[' '.join(i) for i in [i[::-1] for i in list(zip(*[input().split() for _ in range(int(input()))]))]],sep='\n')
