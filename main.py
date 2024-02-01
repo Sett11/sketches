@@ -1,6 +1,7 @@
 n=int(input())
 a=[['0']*n for _ in range(n)]
 for i in range(n):
-    a[i][i]=a[i][n-1-i]='1'
-    a[i]=' '.join(a[i])
-print(*a,sep='\n')
+    for j in range(n):
+        if (i<=j and i<=n-1-j) or (i>=j and i>=n-1-j):
+            a[i][j]='1'
+print(*[' '.join(map(lambda x:x.ljust(3),i)) for i in a],sep='\n')
