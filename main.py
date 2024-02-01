@@ -1,9 +1,3 @@
-b=[['.']*8 for _ in range(8)]
-k,h=input()
-j,i='abcdefgh'.index(k),7-'12345678'.index(h)
-b[i][j]='N'
-for x,y in [[i+1,j+2],[i+2,j+1],[i+1,j-2],[i+2,j-1],[i-1,j-2],[i-2,j-1],[i-1,j+2],[i-2,j+1]]:
-    if 0<=x<8 and 0<=y<8:
-        b[x][y]='*'
-for w in b:
-    print(*w)
+n=int(input())
+a=[[int(j) for j in input().split()] for _ in range(n)]
+print(['NO','YES'][len(set([sum(i) for i in a]+[sum(i) for i in list(zip(*a))]+[sum([a[i][i] for i in range(n)])]+[sum([a[i][n-1-i] for i in range(n)])]))==1 and len(set(sum(a,[])))==n*n and all(i for i in sum(a,[]))])
