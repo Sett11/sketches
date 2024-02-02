@@ -1,5 +1,6 @@
-a=[input() for i in range(int(input()))]
-b=[i for i in a if i[-1] in '45']
-print(*a,sep='\n')
-print('')
-print(*b,sep='\n')
+n=int(input())
+a=[1]*3
+while len(a)<n:
+    a.append(a[-1]+a[-2]+a[-3])
+a=a[:n]
+print(*a)
