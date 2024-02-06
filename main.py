@@ -1,6 +1,7 @@
-n=int(input())
-a=[1]*3
-while len(a)<n:
-    a.append(a[-1]+a[-2]+a[-3])
-a=a[:n]
-print(*a)
+sea = int(input()) 
+village = int(input())
+mount = int(input())
+sea_village = int(input())
+village_mount = int(input())
+dvi = int(input())
+print(sea+village+mount+dvi-sea_village-village_mount)
