@@ -1,2 +1,7 @@
-from re import sub
-print(len(set(sub(r'[.,:;\-?!]','',input().lower()).split())))
+a=[]
+for i in map(int,input().split()):
+    if i not in a:
+        a.append(i)
+        print('NO')
+    else:
+        print('YES')
