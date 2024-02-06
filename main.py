@@ -1,2 +1,2 @@
-a=input()+input()
-print(['NO','YES'][len(set(a))==10])
+a,b=input(),input()
+print(['NO','YES'][set(a)==set(b)])
