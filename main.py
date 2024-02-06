@@ -1,2 +1,2 @@
-a,b=input(),input()
-print(['NO','YES'][set(a)==set(b)])
+a,b,c=input().split()
+print(['NO','YES'][set(a)==set(b)==set(c)])
