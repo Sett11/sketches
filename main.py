@@ -1,1 +1,2 @@
-print(len(set(''.join([input().lower() for _ in range(int(input()))]))))
+from re import sub
+print(len(set(sub(r'[.,:;\-?!]','',input().lower()).split())))
