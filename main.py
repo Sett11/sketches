@@ -1,2 +1,1 @@
-a,b,c=input().split()
-print(['NO','YES'][set(a)==set(b)==set(c)])
+print(*[len(set(input().lower())) for _ in range(int(input()))],sep='\n')
