@@ -1,7 +1,14 @@
-sea = int(input()) 
-village = int(input())
-mount = int(input())
-sea_village = int(input())
-village_mount = int(input())
-dvi = int(input())
-print(sea+village+mount+dvi-sea_village-village_mount)
+n,m,k,x,y,z,t,a=[int(input()) for _ in range(8)]
+a_b = -1 * (x - n - m)
+b_c = -1 * (y - m - k)
+c_a = -1 * (z - n - k)
+only_a_b = a_b - t
+only_b_c = b_c - t
+only_c_a = c_a - t
+one_a = n - t - only_c_a - only_a_b
+one_b = m - t - only_b_c - only_a_b
+one_c = k - t - only_b_c - only_c_a
+r1=one_a+one_b+one_c
+r2=only_a_b+only_b_c+only_c_a
+r3=a-t-r1-r2
+print(r1,r2,r3,sep='\n')
