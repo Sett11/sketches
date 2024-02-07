@@ -1,7 +1,3 @@
-n,m=int(input()),int(input())
-a=[input() for _ in range(n)]
-for _ in range(m):
-    if input() in a:
-        print('YES')
-    else:
-        print('NO')
+a,b=set(input().split()),set(input().split())
+c=' '.join(sorted(a&b,key=int,reverse=True))
+print(c if c else 'BAD DAY')
