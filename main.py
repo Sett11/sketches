@@ -1,2 +1,2 @@
 a,b=input().split(),input().split()
-print(len(set(a)&set(b)))
+print(*sorted(set(a)&set(b),key=int))
