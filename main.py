@@ -1,2 +1,7 @@
-a=[input() for _ in range(int(input()))]
-print(['OK','REPEAT'][input() in a])
+n,m=int(input()),int(input())
+a=[input() for _ in range(n)]
+for _ in range(m):
+    if input() in a:
+        print('YES')
+    else:
+        print('NO')
