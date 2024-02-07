@@ -1,2 +1,2 @@
 a,b,c=[set(input().split()) for _ in range(3)]
-print(*sorted(((a|b)-c)|((a|c)-b)|((b|c)-a),key=int))
+print(*sorted(c-b-a,key=int,reverse=True))
