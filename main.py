@@ -1,1 +1,1 @@
-print(['YES','NO'][set(input()).isdisjoint(input())])
+print(['NO','YES'][set(input()).issuperset(input())])
