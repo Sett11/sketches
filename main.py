@@ -1,2 +1,2 @@
 a,b,c=[set(input().split()) for _ in range(3)]
-print(*sorted(c-b-a,key=int,reverse=True))
+print(*sorted(set(map(str,range(11)))-c-b-a,key=int))
