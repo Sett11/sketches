@@ -1,3 +1,3 @@
-from functools import reduce as r
-q=[set(input() for __ in range(int(input()))) for _ in range(int(input()))]
-print(*sorted(r(lambda a,c:a&c,q)),sep='\n')
+d = {1.12: 'aa', 67.9: 45, 3.11: 'ccc', 7.9: 'dd', 9.2: 'ee', 7.1: 'ff', 0.12: 'qq', 1.91: 'aa', 10.12: [1, 2, 3], 99.0: {9, 0, 1}}
+
+print(min(d)+max(d))
