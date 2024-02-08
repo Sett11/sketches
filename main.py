@@ -1,3 +1,6 @@
-from re import sub
-f=lambda x:sorted(sub(r'[ .,\-!?;:]','',x.lower()))
-print(['NO','YES'][f(input())==f(input())])
+d={}
+for _ in range(int(input())):
+    a,b=input().split()
+    d[a]=b
+    d[b]=a
+print(d[input()])
