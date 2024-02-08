@@ -1,7 +1,3 @@
-from collections import Counter
-s=input()
-d,c={},Counter(s)
-for _ in range(int(input())):
-    a,b=input().split(': ')
-    d[int(b)]=a
-print(''.join(d[c[i]] for i in s))
+a = [34, 10, -4, 6, 10, 23, -90, 100, 21, -35, -95, 1, 36, -38, -19, 1, 6, 87]
+result = {i:j**2 for i,j in enumerate(a)}
+print(result)
