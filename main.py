@@ -1,7 +1,15 @@
 d={}
-for i in range(int(input())):
-    a,*b=input().lower().split()
-    d[a]=b
-for i in range(int(input())):
-    a,b=input().lower().split()
-    print(['Access denied','OK'][('x' if a[0]=='e' else a[0]) in d[b]])
+for _ in range(int(input())):
+    a,*b=input().split()
+    if a in d:
+        if b[0] in d[a]:
+            d[a][b[0]]+=int(b[1])
+        else:
+            d[a][b[0]]=int(b[1])
+    else:
+        d[a]={b[0]:int(b[1])}
+for i in sorted(d):
+    t=sorted(d[i])
+    print(f'{i}:')
+    for j in t:
+        print(j,d[i][j])
