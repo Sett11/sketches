@@ -1,6 +1,10 @@
 d={}
-for _ in range(int(input())):
-    a,b=input().split()
+for i in range(int(input())):
+    a,*b=input().split()
     d[a]=b
-    d[b]=a
-print(d[input()])
+for i in range(int(input())):
+    p=input()
+    for j in d:
+        if p in d[j]:
+            print(j)
+            break
