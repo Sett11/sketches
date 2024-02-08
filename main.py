@@ -1,3 +1,9 @@
-from collections import Counter
-from re import sub
-print(sorted(Counter(sub(r'[.,\-:;!?]','',input().lower()).split()).items(),key=lambda x:(x[1],x[0]))[0][0])
+d,r={},''
+for i in input().split():
+    if i in d:
+        r+=f'{i}_{d[i]} '
+        d[i]+=1
+    else:
+        d[i]=1
+        r+=i+' '
+print(r)
