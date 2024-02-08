@@ -1,10 +1,9 @@
 d={}
-for i in range(int(input())):
-    a,*b=input().split()
-    d[a]=b
-for i in range(int(input())):
-    p=input()
-    for j in d:
-        if p in d[j]:
-            print(j)
-            break
+for _ in range(int(input())):
+    a,b=input().lower().split()
+    if b in d:
+        d[b].append(a)
+    else:
+        d[b]=[a]
+for _ in range(int(input())):
+    print(*d.get(input().lower(),['абонент не найден']))
