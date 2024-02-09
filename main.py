@@ -1,4 +1,6 @@
-a=[input() for _ in range(int(input()))]
-b,n=a[::-1],len(a)
-if n>2:b[n//2],b[0]=b[0],b[n//2]
-print(*[f'{a[i]} - {b[i]}' for i in range(n)],sep='\n')
+from string import digits as d, ascii_letters as a
+from random import choice,sample
+from re import sub
+a=sub(r'[lIoO]','',a)
+f,n,m=lambda n: ''.join(sample(a,n)[:-1])+choice(d[2:]),int(input()),int(input())
+print(*[f(m) for _ in range(n)],sep='\n')
