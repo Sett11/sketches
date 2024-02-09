@@ -1,2 +1,4 @@
 from random import randint
-print(*sorted(randint(1,49) for _ in range(7)))
+generate_ip=lambda:'.'.join(str(randint(0,255)) for _ in range(4))
+
+print(generate_ip())
