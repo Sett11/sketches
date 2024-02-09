@@ -1,4 +1,4 @@
-from random import random
+from random import randint
 
 for _ in range(int(input())):
-    print(['Орел','Решка'][random()>0.5])
+    print(randint(1,6))
