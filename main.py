@@ -1,2 +1,2 @@
 from random import randint
-print('A'+''.join(chr(randint(97,122)) for _ in range(int(input())-1)))
+print(*sorted(randint(1,49) for _ in range(7)))
