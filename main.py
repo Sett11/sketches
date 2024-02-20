@@ -1,3 +1,4 @@
-matrix=lambda n=1,m=None,v=0:[[v]*(m or n) for _ in range(n)]
+def count_args(*args):
+    return len(args)
 
-print(matrix(3,5))
+print(count_args(1,2,3,4,5))
