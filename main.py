@@ -1,4 +1,3 @@
-def count_args(*args):
-    return len(args)
+sq_sum=lambda *args:sum(map(lambda x:x**2,args))
 
-print(count_args(1,2,3,4,5))
+print(sq_sum(1,2,3,4,5))
