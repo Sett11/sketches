@@ -1,4 +1,5 @@
-mean=lambda *args:sum(a:=[i for i in args if type(i) in (int,float)])/(len(a) or 1)
+greet=lambda s,*args:'Hello, '+' and '.join([s]+list(args))+'!'
 
-print(mean(1.5, True, ['stepik'], 'beegeek', 2.5))
-print(mean(True,['stepik'], 'beegeek'))
+print(greet('beegeek'))
+print(greet('stepik', 'beegeek'))
+print(greet('beegeek','a','b'))
