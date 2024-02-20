@@ -1,2 +1,3 @@
-a,b,c=int(input()),complex(input()),complex(input())
-print(b**a+c**a+b.conjugate()**a+c.conjugate()**(a+1))
+matrix=lambda n=1,m=None,v=0:[[v]*(m or n) for _ in range(n)]
+
+print(matrix(3,5))
