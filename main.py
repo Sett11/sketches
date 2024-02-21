@@ -1,1 +1,1 @@
-print(all(i.isdigit() and int(i)<256 for i in input().split('.')))
+print(*[i for i in range(int(input()),int(input())+1) if '0' not in str(i) and all(i%int(j)==0 for j in str(i))])
