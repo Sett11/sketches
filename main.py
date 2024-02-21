@@ -1,1 +1,2 @@
-print(*[i for i in range(int(input()),int(input())+1) if '0' not in str(i) and all(i%int(j)==0 for j in str(i))])
+s=input()
+print(['NO','YES'][len(s)>6 and any(i.isdigit() for i in s) and any(i.islower() for i in s) and any(i.isupper() for i in s)])
