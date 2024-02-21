@@ -1,1 +1,1 @@
-print(*sorted(input().split(),key=lambda x:sum(map(int,x))))
+print(*sorted(input().split(),key=lambda x:(sum(map(int,x)),int(x))))
