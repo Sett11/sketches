@@ -1,2 +1,1 @@
-s=input()
-print(['NO','YES'][len(s)>6 and any(i.isdigit() for i in s) and any(i.islower() for i in s) and any(i.isupper() for i in s)])
+print(['NO','YES'][all('5' in k for k in [[input().split()[1] for _ in range(int(input()))] for __ in range(int(input()))])])
