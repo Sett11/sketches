@@ -1,3 +1,3 @@
-a,x=list(map(int,(input().split()))),int(input())
-l=len(a)-1
-print(sum([j*x**(l-i) for i,j in enumerate(a)]))
+def ignore_command(s):
+    a=['alias', 'configuration', 'ip', 'sql', 'select', 'update', 'exec', 'del', 'truncate']
+    return any(i in s for i in a)
