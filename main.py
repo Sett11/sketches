@@ -1,1 +1,3 @@
-print(*map(lambda x:abs(255-int(x)),input().split()))
+a,x=list(map(int,(input().split()))),int(input())
+l=len(a)-1
+print(sum([j*x**(l-i) for i,j in enumerate(a)]))
