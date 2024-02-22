@@ -1,4 +1,3 @@
-def concat(*args,sep=' '):
-    return f'{sep}'.join(map(str,args))
+words = 'the world is mine take a look what you have started'.split()
 
-print(concat('hello', 'python', 'and', 'stepik',sep='*'))
+print(*map(lambda s:f'"{s}"',words))
