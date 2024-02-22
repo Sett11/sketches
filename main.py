@@ -1,1 +1,3 @@
-print(*sorted([input() for _ in range(int(input()))],key=lambda s:sum([int(j)*256**(3-i) for i,j in enumerate(s.split('.'))])),sep='\n')
+file=open(input())
+print(file.read())
+file.close()
