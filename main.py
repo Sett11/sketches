@@ -1,1 +1,1 @@
-print(*sorted(input().split(),key=str.lower))
+print(*sorted([input() for _ in range(int(input()))],key=lambda s:(sum(map(lambda c:ord(c)-ord('A'),s.upper())),s)),sep='\n')
