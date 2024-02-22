@@ -1,11 +1,6 @@
-def compose(f,g):
-    return lambda x:f(g(x))
+arithmetic_operation =lambda x:lambda a,b:eval(f'{a}{x}{b}')
 
-def add3(x):
-    return x + 3
-
-
-def mul7(x):
-    return x * 7
-
-print(compose(mul7, add3)(1))
+add = arithmetic_operation('+')
+div = arithmetic_operation('/')
+print(add(10, 20))
+print(div(20, 5))
