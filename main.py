@@ -1,1 +1,1 @@
-print(*sorted([input() for _ in range(int(input()))],key=lambda s:(sum(map(lambda c:ord(c)-ord('A'),s.upper())),s)),sep='\n')
+print(*sorted([input() for _ in range(int(input()))],key=lambda s:sum([int(j)*256**(3-i) for i,j in enumerate(s.split('.'))])),sep='\n')
