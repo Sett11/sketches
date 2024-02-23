@@ -1,2 +1,4 @@
-with open('text.txt', encoding='utf-8') as file:
-    print(file.read()[::-1])
+a=[]
+with open('data.txt', encoding='utf-8') as file:
+    a=file.readlines()
+print(*map(str.strip,a[::-1]),sep='\n')
