@@ -1,4 +1,6 @@
 from random import randint
-with open('random.txt','w',encoding='utf-8') as f:
-    for i in range(25):
-        f.write(str(randint(111,777))+'\n')
+with open('input.txt','r',encoding='utf-8') as h,open('output.txt','w',encoding='utf-8') as o:
+    j=1
+    for i in h:
+        o.write(f'{j}) {i}')
+        j+=1
