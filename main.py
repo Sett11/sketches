@@ -1,4 +1,7 @@
-a=[]
-with open('data.txt', encoding='utf-8') as file:
-    a=file.readlines()
-print(*map(str.strip,a[::-1]),sep='\n')
+a,m=[],0
+with open('lines.txt', encoding='utf-8') as file:
+    for i in file:
+        s=i.strip()
+        m=max(m,len(s))
+        a.append(s)
+print(*[i for i in a if len(i)==m],sep='\n')
