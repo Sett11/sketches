@@ -1,3 +1,2 @@
-f=open('prices.txt')
-print(sum(map(lambda s:int(s.split('\t')[-1])*int(s.split('\t')[-2]),f.readlines())))
-f.close()
+with open('text.txt', encoding='utf-8') as file:
+    print(file.read()[::-1])
