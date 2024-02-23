@@ -1,6 +1,6 @@
-from re import sub
-a=[]
+from random import choice
 
-with open('file.txt', encoding='utf-8') as file:
-    a=list(map(str.strip,file.readlines()))
-print('Input file contains:',f"{len(''.join([sub(r'[^A-z]','',i) for i in a]))} letters",f'{sum([len(i.split()) for i in a])} words',f'{len(a)} lines',sep='\n')
+with open('first_names.txt',encoding='utf-8') as f,open('last_names.txt',encoding='utf-8') as c:
+    a,b=f.readlines(),c.readlines()
+    for i in range(3):
+        print(choice(a).strip(),choice(b).strip())
