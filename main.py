@@ -1,4 +1,5 @@
-with open('class_scores.txt','r',encoding='utf-8') as h,open('new_scores.txt','w',encoding='utf-8') as o:
+with open('logfile.txt','r',encoding='utf-8') as h,open('output.txt','w',encoding='utf-8') as o:
     for i in h:
-        a,b=i.split()
-        o.write(f'{a} {min(int(b)+5,100)}\n')
+        a,b,c=i.split(', ')
+        if abs(float(b.replace(':','.'))-float(c.replace(':','.')))>=1:
+            print(a)
