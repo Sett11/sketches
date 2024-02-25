@@ -1,3 +1,11 @@
-with open('words.txt') as f:
-    a=sorted(f.read().replace('\n',' ').split(),key=len,reverse=True)
-    print(*[i for i in a if len(i)==len(a[0])],sep='\n')
+filename = input()
+with open(filename, encoding='utf-8') as file:
+    content = file.readlines()
+    count = len(content)
+    if count < 10:
+        for s in content:
+            print(s, end='')
+    else:
+        res = content[-10:]
+        for s in res:
+            print(s, end='')
