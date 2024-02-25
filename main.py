@@ -1,9 +1,18 @@
-from re import sub,IGNORECASE
-s=set()
-with open('forbidden_words.txt','r',encoding='utf-8') as d:
-    s.update(d.read().split())
-with open(input()) as x:
-    a=x.read()
-    for i in s:
-        a=sub(i,lambda c:'*'*len(c.group()),a,flags=IGNORECASE)
-    print(a)
+from string import printable as p
+d={
+    'а': 'a', 'к': 'k', 'х': 'h', 'б': 'b', 'л': 'l', 'ц': 'c', 'в': 'v', 'м': 'm', 'ч': 'ch',
+    'г': 'g', 'н': 'n', 'ш': 'sh', 'д': 'd', 'о': 'o', 'щ': 'shh', 'е': 'e', 'п': 'p', 'ъ': '*',
+    'ё': 'jo', 'р': 'r', 'ы': 'y', 'ж': 'zh', 'с': 's', 'ь': "'", 'з': 'z', 'т': 't', 'э': 'je',
+    'и': 'i', 'у': 'u', 'ю': 'ju', 'й': 'j', 'ф': 'f', 'я': 'ya',
+    'А': 'A', 'К': 'K', 'Х': 'H', 'Б': 'B', 'Л': 'L', 'Ц': 'C', 'В': 'V', 'М': 'M', 'Ч': 'Ch',
+    'Г': 'G', 'Н': 'N', 'Ш': 'Sh', 'Д': 'D', 'О': 'O', 'Щ': 'Shh', 'Е': 'E', 'П': 'P', 'Ъ': '*',
+    'Ё': 'Jo', 'Р': 'R', 'Ы': 'Y', 'Ж': 'Zh', 'С': 'S', 'Ь': "'", 'З': 'Z', 'Т': 'T', 'Э': 'Je',
+    'И': 'I', 'У': 'U', 'Ю': 'Ju', 'Й': 'J', 'Ф': 'F', 'Я': 'Ya',
+}
+with open('cyrillic.txt', encoding='utf-8') as c,open('transliteration.txt','w',encoding='utf-8') as f:
+    for i in c:
+        for j in i:
+            if j in p:
+                print(j,end='')
+            else:
+                print(d[j],end='')
