@@ -1,3 +1,5 @@
-for _ in range(int(input())):
-    with open(input(),'r') as f,open('output.txt','a') as o:
-        o.write(f.read())
+j=0
+with open(input()) as f:
+    for _ in f:
+        j+=1
+print(j)
