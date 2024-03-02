@@ -1,1 +1,1 @@
-print(sum(map(int,input().split())),sum(map(int,input().split())),sep='#')
+print(*set(input().split('&')))
