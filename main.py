@@ -1,2 +1,1 @@
-a=input().split()
-print(a[1],a[2],a[-2])
+print(*input().split()[::-1],sep='-$-')
