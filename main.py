@@ -1,1 +1,2 @@
-print(*input().split()[::-1],sep='-$-')
+a=input().split()
+print(len(a),a.count('one'))
