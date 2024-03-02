@@ -1,2 +1,1 @@
-a=input().split()
-print(len(a),a.count('one'))
+print(sum(map(int,input().split())))
