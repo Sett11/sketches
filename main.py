@@ -1,3 +1,3 @@
-is_prime=lambda n:n>1 and all(n%i!=0 for i in range(2,int(n**.5+1)))
-
-print(is_prime(5))
+n=int(input())
+donuts=lambda n:f'Всего пончиков: {n if n<10 else "много"}'
+print(donuts(n))
