@@ -1,3 +1,5 @@
-n=int(input())
-donuts=lambda n:f'Всего пончиков: {n if n<10 else "много"}'
-print(donuts(n))
+s = input()
+def both_ends(s):
+    return s[:2]+s[-2:] if len(s)>1 else ''
+
+print(both_ends(s))
