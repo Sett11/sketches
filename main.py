@@ -11,15 +11,17 @@ def kaprekar_step(L):
 
 
 def kaprekar_loop(n):
-    if n==1000:
-        print("Ошибка! На вход подано число 1000")
+    if not kaprekar_check(n):
+        print(f"Ошибка! На вход подано число {n}, не удовлетворяющее условиям процесса Капрекара")
         return
-    if len(set(numerics(n)))==1:
-        print(f"Ошибка! На вход подано число {n} - все цифры одинаковые")
-        return
+    r=[]
     print(n)
-    while n!=6174:
+    while n not in (495, 6174, 549945, 631764):
         n=kaprekar_step(numerics(n))
+        if n in r:
+            print(f'Следующее число - {n}, кажется процесс зациклился...')
+            return
+        r.append(n)
         print(n)
 
 print(kaprekar_loop(1000))
