@@ -1,5 +1,6 @@
 s = input()
-def both_ends(s):
-    return s[:2]+s[-2:] if len(s)>1 else ''
+def fix_start(s):
+    a,b=s[0],s[1:]
+    return a+b.replace(a,'*')
 
-print(both_ends(s))
+print(fix_start(s))
