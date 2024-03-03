@@ -1,2 +1,2 @@
-def even_indeces(L):
-    return [j for i,j in enumerate(L) if i%2==0]
+def even_elements(L):
+    return [i for i in L if i%2==0]
