@@ -1,5 +1,3 @@
-factorial=f=lambda n:1 if n<=1 else n*f(n-1)
-sf=lambda n:1 if n<=1 else f(n)*sf(n-1)
+maxId=lambda a:a.index(max(a,key=int))
 
-print(f(3))
-print(sf(3))
+print(maxId([1, 2, '42', '3', '4', '5', 6, 13]))
