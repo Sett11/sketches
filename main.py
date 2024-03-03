@@ -1,3 +1,4 @@
-front_x=lambda a:sorted(a,key=lambda x:(not x.startswith('x'),x))
+def fib(n):
+    return 0 if n==0 else 1 if n==1 else fib(n-1)+fib(n-2)
 
-print(front_x(['mix', 'extra', '', 'x-files', 'xyz', 'xapple', 'apple']))
+print(fib(9))
