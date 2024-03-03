@@ -1,9 +1,16 @@
-def kaprekar(n):
-    k=str(n**2)
-    for i in range(1,len(k)):
-        a,b=int(k[:i]),int(k[i:])
-        if int(k[:i])+int(k[i:])==n and (a and b):
-            return True
-    return False
+from string import digits,ascii_uppercase
 
-print(kaprekar(297))
+def cb(n,b):
+    a,r=digits+ascii_uppercase,''
+    while n:
+        r=a[n%b]+r
+        n//=b
+    return r
+
+def convert(n,tb=10,fb=10):
+    return cb(int(str(n),fb),tb)
+    
+
+
+print(convert(42))
+print(convert('2A',16))
