@@ -1,10 +1,8 @@
-from decimal import *
-getcontext().prec = 50
-
-def fi(a,b,n):
-    while n>1:
+def super_L(n):
+    a,b=2,1
+    while n:
         a,b=b,a+b
         n-=1
-    return Decimal(b)/Decimal(a)
+    return a
 
-print(fi(0,1,11))
+print(super_L(180))
