@@ -1,3 +1,3 @@
-dfactorial=f=lambda n:1 if n<=1 else n*f(n-2)
+Kfactorial=f=lambda n,k=1:max(n,1) if n<=k or n<=1 else n*f(n-k,k)
 
-print(dfactorial(5))
+print(Kfactorial(10,1))
