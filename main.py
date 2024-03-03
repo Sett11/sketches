@@ -1,8 +1,9 @@
-def super_L(n):
-    a,b=2,1
-    while n:
-        a,b=b,a+b
-        n-=1
-    return a
+def kaprekar(n):
+    k=str(n**2)
+    for i in range(1,len(k)):
+        a,b=int(k[:i]),int(k[i:])
+        if int(k[:i])+int(k[i:])==n and (a and b):
+            return True
+    return False
 
-print(super_L(180))
+print(kaprekar(297))
