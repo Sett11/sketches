@@ -1,7 +1,10 @@
-def luka(a,b,n):
-    while n:
+from decimal import *
+getcontext().prec = 50
+
+def fi(a,b,n):
+    while n>1:
         a,b=b,a+b
         n-=1
-    return a
+    return Decimal(b)/Decimal(a)
 
-print(luka(12345,67890,5))
+print(fi(0,1,11))
