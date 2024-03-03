@@ -1,5 +1,1 @@
-t,s=0,input()
-while s!='The End':
-    t+=int(s)
-    s=input()
-print(t)
+print(*[i for i in input().split() if i[0]!='*'],sep='\n')
