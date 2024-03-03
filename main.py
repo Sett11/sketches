@@ -1,4 +1,3 @@
-def fib(n):
-    return 0 if n==0 else 1 if n==1 else fib(n-1)+fib(n-2)
+is_prime=lambda n:n>1 and all(n%i!=0 for i in range(2,int(n**.5+1)))
 
-print(fib(9))
+print(is_prime(5))
