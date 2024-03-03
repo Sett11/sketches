@@ -9,6 +9,7 @@ def kaprekar_step(L):
     L.sort()
     return int(''.join(map(str,L[::-1])))-int(''.join(map(str,L)))
 
+
 def kaprekar_loop(n):
     if n==1000:
         print("Ошибка! На вход подано число 1000")
