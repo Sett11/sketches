@@ -1,1 +1,3 @@
-print(sum(i for i in range(1,int(input())+1) if i%5==0 and i%3))
+common=lambda a,b:list(set(a)&set(b))
+
+print(common([0, 2, 3, 4, 5, 19, 42],[0, 6, 19, 33, 42, 55, 66, 77, 99, 101, 256]))
