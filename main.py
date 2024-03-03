@@ -1,2 +1,1 @@
-def last_to_first(l):
-    return l[::-1]
+print(sum(i for i in range(1,int(input())+1) if i%5==0 and i%3))
