@@ -1,13 +1,11 @@
-r=[]
-with open(sheet,'r',encoding='utf-8') as f:
-    for i in f.readlines():
-        p=i.split()
-        if p[-1]=='(экзамен)' or p[-1]=='(автомат)':
-            r.append(int(p[-2]))
-t=sum(r)/len(r)
-with open(mean,'r',encoding='utf-8') as f:
-    x=sum(map(int,f.read().strip()))
-    if x==t:
-        print('OK')
+import os
+
+x=input()
+if os.path.exists(x):
+    if os.path.isfile(x):
+        with open(x,'r',encoding='utf-8') as f:
+            print(f'CONTENT:\n{f.read()}')
     else:
-        print('ERROR')
+        print('ERROR:\nЭто каталог, а не файл')
+else:  
+    print('ERROR:\nФайл не существует')
