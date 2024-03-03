@@ -1,1 +1,5 @@
-print(*[i for i in range(int(input())+1)],sep='\n')
+t,s=0,input()
+while s!='The End':
+    t+=int(s)
+    s=input()
+print(t)
