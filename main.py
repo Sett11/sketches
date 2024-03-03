@@ -1,5 +1,2 @@
-from math import exp
-def def_e(x):
-    return round(exp(x),3)
-
-print(def_e(int(input())))
+def even_indeces(L):
+    return [j for i,j in enumerate(L) if i%2==0]
