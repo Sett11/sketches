@@ -1,16 +1,11 @@
-from string import digits,ascii_uppercase
+n,i,j=int(input()),1,0
+while n>=1:
+    n-=i
+    j+=1
+    i+=j
+print(j-1 or 1)
 
-def cb(n,b):
-    a,r=digits+ascii_uppercase,''
-    while n:
-        r=a[n%b]+r
-        n//=b
-    return r
-
-def convert(n,tb=10,fb=10):
-    return cb(int(str(n),fb),tb)
-    
-
-
-print(convert(42))
-print(convert('2A',16))
+from bisect import insort
+r,f=[],lambda:[insort(r,int(i)) for i in input().split()]
+input() and f() and f()
+print(*r)
