@@ -1,20 +1,6 @@
-from string import digits,ascii_uppercase
+def wisdom_multiplication(x, y, length_check = True):
+    c,d=(100-x),(100-y)
+    a,s=100-(c+d),str(c*d)
+    return str(a)+f'{0 if len(s)==1 and length_check else ""}'+s
 
-def cb(n,b):
-    a,r=digits+ascii_uppercase,''
-    while n:
-        r=a[n%b]+r
-        n//=b
-    return r
-
-        
-def kaprekar(n,base=10):
-    c=int(str(n),base)
-    k=cb(c**2,base)
-    for i in range(1,len(k)):
-        a,b=int(k[:i],base),int(k[i:],base)
-        if a+b==c and (a and b):
-            return True
-    return False
-
-print(kaprekar('F',16))
+print(wisdom_multiplication(99,99,False))
