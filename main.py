@@ -1,1 +1,1 @@
-print(int(input()) in [i for i in range(6,20)])
+print(any(i=='awesome' for i in [input(),input()]))
