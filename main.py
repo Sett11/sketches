@@ -1,3 +1,2 @@
-a,b=map(int,input().split())
-t=a+b-1
-print(t-a,t-b)
+n=int(input())
+print(f'{n-1}<{n}<{n+1}')
