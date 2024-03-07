@@ -1,1 +1,1 @@
-print(sum(map(int,input().split()))/4)
+print(max(input().split(),key=int))
