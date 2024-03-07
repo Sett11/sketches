@@ -1,2 +1,2 @@
-n,m=float(input()),float(input())
-print(abs(n-m))
+n=float(input())
+print(round(n,2),round(n,3))
