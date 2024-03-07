@@ -1,2 +1,2 @@
-a,b,c=map(int,input().split())
-print(a*b*c*2)
+n=int(input())//3
+print(n//2,n*2,n//2)
