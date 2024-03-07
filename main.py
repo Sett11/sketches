@@ -1,2 +1,3 @@
-a,b,c,d,e,g=int(input())*3600,int(input())*60,int(input()),int(input())*3600,int(input())*60,int(input())
-print((d+e+g)-(a+b+c))
+a=sorted(int(input()) for _ in range(3))
+b=max(a[0]*a[1],a[0]+a[1])
+print(max(b*a[2],b+a[2]))
