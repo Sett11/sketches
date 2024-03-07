@@ -1,1 +1,1 @@
-print(input(),end=' - Сказала она!')
+print(int(input())//1000)
