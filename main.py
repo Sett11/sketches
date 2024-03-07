@@ -1,1 +1,1 @@
-print(len(set(input().split()))==1)
+print(int(input()) in [i for i in range(6,20)])
