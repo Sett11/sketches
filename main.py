@@ -1,1 +1,1 @@
-print(__import__('math').ceil(int(input())/10))
+print(-(-int(input())//4))
