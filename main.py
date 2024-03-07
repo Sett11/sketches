@@ -1,1 +1,1 @@
-print(all(i%7==0 for i in map(int,input().split())))
+print(len(set(input().split()))==1)
