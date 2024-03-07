@@ -1,2 +1,1 @@
-n=int(input())
-print(f'{n-1}<{n}<{n+1}')
+print(*[input() for _ in range(3)],sep='---')
