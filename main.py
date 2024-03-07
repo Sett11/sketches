@@ -1,1 +1,2 @@
-print(sum(map(int,input())))
+a = int(input())
+print(a // 100 + a % 100 // 20 + a % 100 % 20 // 10 + a % 100 % 20 % 10 // 5 + a % 100 % 20 % 10 % 5 // 1)
