@@ -1,3 +1,3 @@
-a,b,c=3,5,12
-d,e,f=map(int,input().split())
-print(a*d+b*e+c*f)
+a,b=map(int,input().split())
+t=a+b-1
+print(t-a,t-b)
