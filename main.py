@@ -1,1 +1,1 @@
-print(-(-int(input())//4))
+print(sum(-(-int(input())//2) for _ in range(3)))
