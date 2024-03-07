@@ -1,1 +1,2 @@
-print(int(input())//1000)
+n,m=int(input()),int(input())
+print(divmod(m,n)[0])
