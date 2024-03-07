@@ -1,2 +1,2 @@
-n=int(input())%1440
-print(n//60,n-(n//60)*60)
+n=int(input())
+print(n+(1 if n&1 else 2))
