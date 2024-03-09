@@ -1,1 +1,1 @@
-print('W'*777)
+print(*[input() for _ in range(3)][::-1],sep='\n')
