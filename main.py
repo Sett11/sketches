@@ -1,1 +1,1 @@
-print(input()*3)
+print(*[f"""Simvol code {i} is {ord(i)}.""" for i in input().split()],sep='\n')
