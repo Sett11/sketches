@@ -1,1 +1,1 @@
-print(''.join([input(),input()][::-1]))
+print(input()*3)
