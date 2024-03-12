@@ -1,1 +1,1 @@
-print(input()[:4])
+print(input()[-4:])
