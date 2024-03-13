@@ -1,4 +1,8 @@
 import requests
+import time
+import asyncio
+
+
 # 1
 # Делаем get-запрос в google, получаем ответ, разбираем ответ в виде гипертекста html, записываем его в файл index.html
 # params={'q':'dzen python'}
@@ -29,6 +33,29 @@ import requests
 #         for i in response.json():
 #             print(i['body'][:5])
 
-params={'q':'dzen python'}
-response=requests.get('https://google.com/search',params=params)
-print(type(response.request))
+
+async def fun1(x):
+    print(x**2)
+    await asyncio.sleep(3)
+    print('fun1 завершена')
+
+
+async def fun2(x):
+    print(x**0.5)
+    await asyncio.sleep(3)
+    print('fun2 завершена')
+
+
+async def main():
+    task1 = asyncio.create_task(fun1(4))
+    task2 = asyncio.create_task(fun2(4))
+
+    await task1
+    await task2
+
+
+print(time.strftime('%X'))
+
+asyncio.run(main())
+
+print(time.strftime('%X'))
