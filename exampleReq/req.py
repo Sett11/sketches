@@ -1,6 +1,10 @@
 import requests
 import time
 import asyncio
+import threading
+import multiprocessing
+import os
+import random
 
 
 # 1
@@ -34,28 +38,91 @@ import asyncio
 #             print(i['body'][:5])
 
 
-async def fun1(x):
-    print(x**2)
-    await asyncio.sleep(3)
-    print('fun1 завершена')
+# 4 multiprocessing Пример разделения выполнения программы на разные процессы (если количество ядер CPU позволяет)
+# Примечание - в случае использования процессов способ запуска является принципиальным, иначе приводит к неблокирующей ошибке
+# В нашем случае работает не корректно, возможно ввиду малого количества ядер. 
+
+# def f(n):
+#     s = random.randrange(1,10)
+#     time.sleep(s)
+#     print(f"I am Worker {n}, i slept for {s} seconds")
+
+# if __name__=='__main__':
+#     for i in range(2):
+#         f(i)
+    
+#     print("All Processes are queued, let's see when they finish!")
+
+# if __name__=='__main__':
+
+#     for i in range(2):
+#         t = multiprocessing.Process(target=f,args=(i,))
+#         t.start()
+#         t.join()
+
+#     print("All Processes are queued, let's see when they finish!")
 
 
-async def fun2(x):
-    print(x**0.5)
-    await asyncio.sleep(3)
-    print('fun2 завершена')
+# 5 threading Пример разделения выполнения программы на разные потоки
 
+# def f(n):
+#     sec=random.randrange(1,10)
+#     time.sleep(sec)
+#     print(f'I am Worker {n}, i slept for {sec} seconds')
 
-async def main():
-    task1 = asyncio.create_task(fun1(4))
-    task2 = asyncio.create_task(fun2(4))
+# синхронная версия
+# for i in range(5):
+#     f(i)
 
-    await task1
-    await task2
+# мультипоточная версия
+# for i in range(5):
+#     t=threading.Thread(target=f,args=(i,))
+#     t.start()
 
+# print('All Threads finiched???')
 
-print(time.strftime('%X'))
+# 6 Пример синхронного (последовательного) выполнения программы
+# def f1(n):
+#     print('f1 start')
+#     print(n**2)
+#     time.sleep(3)
+#     print('f1 comleted')
 
-asyncio.run(main())
+# def f2(n):
+#     print('f2 start')
+#     print(n**.5)
+#     time.sleep(3)
+#     print('f2 comleted')
 
-print(time.strftime('%X'))
+# def main():
+#     print('Start main')
+#     f1(5),f2(5)
+#     print('Comleted main')
+
+# print(time.strftime('%X'))
+# main()
+# print(time.strftime('%X'))
+
+# 6.1 asyncio Пример асинхронного (непоследовательного) выполнения программы
+# async def f1(n):
+#     print('f1 start')
+#     print(n**2)
+#     await asyncio.sleep(3)
+#     print('f1 comleted')
+
+# async def f2(n):
+#     print('f2 start')
+#     print(n**.5)
+#     await asyncio.sleep(3)
+#     print('f2 comleted')
+
+# async def main():
+#     print('Start main')
+#     a=asyncio.create_task(f1(5))
+#     b=asyncio.create_task(f2(5))
+#     await a, await b
+#     print('Comleted main')
+
+# print(time.strftime('%X'))
+# asyncio.run(main())
+# print(time.strftime('%X'))
