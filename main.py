@@ -1,1 +1,1 @@
-print(input().lower())
+print(input().lower()==input().lower())
