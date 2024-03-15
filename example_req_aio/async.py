@@ -1,7 +1,7 @@
-# 6 Пример синхронного (последовательного) выполнения программы
-
 import time
+import requests
 import asyncio
+import aiohttp
 
 # def f1(n):
 #     print('f1 start')
@@ -25,7 +25,7 @@ import asyncio
 # main()
 # print(time.strftime('%X'))
 
-# Пример асинхронного (непоследовательного) выполнения программы
+
 # async def f1(n):
 #     print('f1 start')
 #     print(n**2)
@@ -48,3 +48,35 @@ import asyncio
 # print(time.strftime('%X'))
 # asyncio.run(main())
 # print(time.strftime('%X'))
+
+def f():
+    requests.get('http://google.com')
+    requests.get('http://google.com')
+    requests.get('http://google.com')
+    requests.get('http://google.com')
+    requests.get('http://google.com')
+    requests.get('http://google.com')
+    requests.get('http://google.com')
+    requests.get('http://google.com')
+    requests.get('http://google.com')
+    requests.get('http://google.com')
+    print('OK')
+
+async def g():
+    async with aiohttp.ClientSession() as s:
+        await s.get('http://google.com')
+        await s.get('http://google.com')
+        await s.get('http://google.com')
+        await s.get('http://google.com')
+        await s.get('http://google.com')
+        await s.get('http://google.com')
+        await s.get('http://google.com')
+        await s.get('http://google.com')
+        await s.get('http://google.com')
+        await s.get('http://google.com')
+        print('OK')
+
+t=time.time()
+asyncio.run(g())
+# f()
+print(time.time()-t)

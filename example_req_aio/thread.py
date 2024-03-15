@@ -9,13 +9,13 @@ def f(n):
     time.sleep(sec)
     print(f'I am Worker {n}, i slept for {sec} seconds')
 
-# синхронная версия
-# for i in range(5):
-#     f(i)
+x=time.time()
 
-# мультипоточная версия
-# for i in range(5):
-#     t=threading.Thread(target=f,args=(i,))
-#     t.start()
+# f(1),f(2),f(3)
 
-print('All Threads finiched???')
+
+# t,p,r=threading.Thread(target=f,args=(1,)),threading.Thread(target=f,args=(2,)),threading.Thread(target=f,args=(3,))
+# t.start(),p.start(),r.start()
+# t.join(),p.join(),r.join()
+
+print('All Threads finiched???',time.time()-x,sep='\n')

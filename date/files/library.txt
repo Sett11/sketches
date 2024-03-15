@@ -3,3 +3,4 @@ scipy:
 matplotlib:
 requests:
 tkinder:
+beautifulsoup4:
