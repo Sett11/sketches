@@ -1,1 +1,1 @@
-print(input().title().swapcase())
+print(input().lower().count('e'))
