@@ -1,1 +1,1 @@
-print(input().find('a'))
+print(input().rfind('a'))
