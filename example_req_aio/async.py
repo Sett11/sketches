@@ -3,6 +3,13 @@ import requests
 import asyncio
 import aiohttp
 
+async def f(n):
+    return n**2
+
+res=asyncio.run(f(5))
+
+print(res)
+
 # def f1(n):
 #     print('f1 start')
 #     print(n**2)
@@ -49,34 +56,34 @@ import aiohttp
 # asyncio.run(main())
 # print(time.strftime('%X'))
 
-def f():
-    requests.get('http://google.com')
-    requests.get('http://google.com')
-    requests.get('http://google.com')
-    requests.get('http://google.com')
-    requests.get('http://google.com')
-    requests.get('http://google.com')
-    requests.get('http://google.com')
-    requests.get('http://google.com')
-    requests.get('http://google.com')
-    requests.get('http://google.com')
-    print('OK')
+# def f():
+#     requests.get('http://google.com')
+#     requests.get('http://google.com')
+#     requests.get('http://google.com')
+#     requests.get('http://google.com')
+#     requests.get('http://google.com')
+#     requests.get('http://google.com')
+#     requests.get('http://google.com')
+#     requests.get('http://google.com')
+#     requests.get('http://google.com')
+#     requests.get('http://google.com')
+#     print('OK')
 
-async def g():
-    async with aiohttp.ClientSession() as s:
-        await s.get('http://google.com')
-        await s.get('http://google.com')
-        await s.get('http://google.com')
-        await s.get('http://google.com')
-        await s.get('http://google.com')
-        await s.get('http://google.com')
-        await s.get('http://google.com')
-        await s.get('http://google.com')
-        await s.get('http://google.com')
-        await s.get('http://google.com')
-        print('OK')
+# async def g():
+#     async with aiohttp.ClientSession() as s:
+#         await s.get('http://google.com')
+#         await s.get('http://google.com')
+#         await s.get('http://google.com')
+#         await s.get('http://google.com')
+#         await s.get('http://google.com')
+#         await s.get('http://google.com')
+#         await s.get('http://google.com')
+#         await s.get('http://google.com')
+#         await s.get('http://google.com')
+#         await s.get('http://google.com')
+#         print('OK')
 
-t=time.time()
-asyncio.run(g())
+# t=time.time()
+# asyncio.run(type(g()))
 # f()
-print(time.time()-t)
+# print(time.time()-t)

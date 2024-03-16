@@ -2,6 +2,9 @@ from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor
 import time
 import requests
 
+# функция g делает запрос, функция f принимает флаг (по дефолту - False) и 30 раз вызывает функцию g
+# в случае флага - False синхронно, в противоположном случае - через pool executor (абстракция над процессами и тредами)
+
 def g():
     params={'q':'fack'}
     response=requests.get('http://google.com/search',params=params)
