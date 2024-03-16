@@ -1,1 +1,1 @@
-print(input().swapcase())
+print(input().title().swapcase())
