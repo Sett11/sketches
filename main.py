@@ -1,1 +1,1 @@
-print(input().lower().count('e'))
+print(input().find('a'))
