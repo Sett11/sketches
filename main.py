@@ -1,1 +1,0 @@
-print(__import__('re').sub(r'.',lambda s:'' if s.group() in 'aiouey' else '.'+s.group(),input().lower()))

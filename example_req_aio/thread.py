@@ -73,3 +73,22 @@ def fib(n):
 # t.join(),p.join(),r.join()
 
 # print('All Threads finiched???',time.time()-x,sep='\n')
+
+# array=[0]
+
+# def f():
+#     c=array[0]
+#     time.sleep(.1)
+#     array[0]=c+1
+
+# threads=[threading.Thread(target=f,daemon=True) for _ in range(100)]
+# # threads=[f for _ in range(10)]
+
+# for i in threads:
+#     # i()
+#     i.start()
+
+# for i in threads:
+#     i.join()
+
+# print(array)
