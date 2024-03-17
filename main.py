@@ -1,1 +1,1 @@
-print(input().rfind('a'))
+print(input().replace(' ',','))
