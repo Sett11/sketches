@@ -7,7 +7,7 @@ from random import randrange
 
 # 1
 # Делаем get-запрос в google, получаем ответ, разбираем ответ в виде гипертекста html, записываем его в файл index.html
-# 
+
 # params={'q':'dzen python'}
 # response=requests.get('https://google.com/search',params=params, allow_redirects=True)
 # if response:

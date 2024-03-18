@@ -3,12 +3,12 @@ import requests
 import asyncio
 import aiohttp
 
-async def f(n):
-    return n**2
+# async def f(n):
+#     return n**2
 
-res=asyncio.run(f(5))
+# res=asyncio.run(f(5))
 
-print(res)
+# print(res)
 
 # def f1(n):
 #     print('f1 start')
