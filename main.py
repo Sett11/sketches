@@ -1,1 +1,1 @@
-print(input().lower().startswith('mam'))
+print(input().endswith(input()))
