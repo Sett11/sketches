@@ -1,1 +1,1 @@
-print(input().isdigit())
+print(input().isupper())
