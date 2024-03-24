@@ -1,1 +1,1 @@
-print(input().isupper())
+print(input().islower())
