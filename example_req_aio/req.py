@@ -62,16 +62,16 @@ from random import randrange
 # В рамках сессии делаем запрос на сайт с анекдотами, а именно на страницу с лучшими анекдотами за случайный день, получаем
 # гипертекстовый документ, затем при помощи библиотеки beautifulsoup4 разбираем html и получаем все анекдоты со страницы в виде списка
 
-# jokes=[]
+jokes=[]
 
-# with requests.session() as s:
-#     n,k=randrange(1,13),randrange(1,29)
-#     url=f"https://www.anekdot.ru/best/anekdot/{str(n).rjust(2,'0')}{str(k).rjust(2,'0')}"
-#     response=s.get(url)
-#     if response:
-#         soup=BeautifulSoup(response.text)
-#         list_soup=soup.find_all('div',class_='text',string=True)
-#         for i in list_soup:
-#             jokes.append(i.get_text())
+with requests.session() as s:
+    n,k=randrange(1,13),randrange(1,29)
+    url=f"https://www.anekdot.ru/best/anekdot/{str(n).rjust(2,'0')}{str(k).rjust(2,'0')}"
+    response=s.get(url)
+    if response:
+        soup=BeautifulSoup(response.text,features="html.parser")
+        list_soup=soup.find_all('div',class_='text',string=True)
+        for i in list_soup:
+            jokes.append(i.get_text())
 
-# print(*jokes,sep='\n')
+print(*jokes,sep='\n')
