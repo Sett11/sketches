@@ -1,23 +1,15 @@
 import numpy as np
-from time import time
 
 
-a=np.arange(1,10)
-a.resize(3,3)
-b=np.arange(10,19)
-b.resize(3,3)
-print(np.dot(a,b))
-print(np.matmul(a,b))
-print(a@b)
-c,d=np.arange(1,10),np.ones(9)
-print(np.inner(c,d))
-print(np.outer(c,d))
-
-x=np.arange(1,4)
-y=x**2
-z=x**3
-k=np.array([x,y,z])
-print(np.linalg.solve(k,np.array([10,20,30])))
-kk=np.linalg.inv(k)
-print(kk)
-print(kk@np.array([10,20,30]))
+a=np.ones(5)
+print(np.unique(a))
+b=np.array([1,2,3,4]*2)
+c,d=np.unique(b,return_inverse=True)
+print(c[d])
+e,j=np.arange(10),np.arange(1,5)
+print(np.in1d(e,j))
+print(np.intersect1d(e,j))
+print(np.union1d(e,j))
+print(np.setdiff1d(e,j))
+print(np.setdiff1d(j,e))
+print(np.setxor1d(j,e))
