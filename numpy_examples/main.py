@@ -1,15 +1,18 @@
+from sympy import symbols,diff,sin,tan,atan
 import numpy as np
+from scipy.misc import derivative
+import matplotlib.pyplot as plt
 
 
-a=np.ones(5)
-print(np.unique(a))
-b=np.array([1,2,3,4]*2)
-c,d=np.unique(b,return_inverse=True)
-print(c[d])
-e,j=np.arange(10),np.arange(1,5)
-print(np.in1d(e,j))
-print(np.intersect1d(e,j))
-print(np.union1d(e,j))
-print(np.setdiff1d(e,j))
-print(np.setdiff1d(j,e))
-print(np.setxor1d(j,e))
+x,y=symbols('x y')
+print(diff((3*x-1)/(2*x+5)))
+
+a=np.logspace(1,10,30)
+b=np.diff(a)
+plt.plot(list(a),[0]+list(b))
+plt.show()
+
+def f(x):
+    return x**2+x**3
+
+print(derivative(f,1.0,dx=1e-3))
