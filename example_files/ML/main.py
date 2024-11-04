@@ -1,33 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# x_train = np.random.randint(10,50,size=(30,2))
-x_train = np.array([[10, 50], [20, 30], [25, 30], [20, 60], [15, 70], [40, 40], [30, 45], [20, 45], [40, 30], [7, 35]])
-# y_train = np.random.choice([1,-1],size=30)
+x_train = np.array([i+[1] for i in [[10, 50], [20, 30], [25, 30], [20, 60], [15, 70], [40, 40], [30, 45], [20, 45], [40, 30], [7, 35]]])
 y_train = np.array([-1, 1, 1, -1, -1, 1, 1, -1, 1, -1])
 
+pt=np.sum([x*y for x,y in zip(x_train,y_train)],axis=0)
+xxt=np.sum([np.outer(x,x) for x in x_train],axis=0)
+w=np.dot(pt,np.linalg.inv(xxt))
 
-def binary_classications(a,b,N,L,E):
-    w=[0,-1]
-    f=lambda x:np.sign(x[0]*w[0]+x[1]*w[1])
-    last_er_idx=-1
-    n=len(a)
-    for _ in range(N):
-        for i in range(n):
-            if b[i]*f(a[i])<0:
-                w[0]=w[0]+L*b[i]
-                last_er_idx=i
-        s=sum(1 for i in range(n) if b[i]*f(a[i])<0)
-        if s==0:
-            break
-    if last_er_idx>-1:
-        w[0]=w[0]+E*b[last_er_idx]
-    return a,b,w
+line_x=list(range(max(x_train[:,0])))
+line_y=[-x*w[0]/w[1]-w[2]/w[1] for x in line_x]
 
-x_train,y_train,w=binary_classications(x_train,y_train,50,.1,.1)
-line_x = list(range(max(x_train[:, 0])))
-line_y=[w[0]*x for x in line_x]
-x_0,x_1=x_train[y_train==1],x_train[y_train==-1]
+x_0=x_train[y_train==1]
+x_1=x_train[y_train==-1]
 
 plt.scatter(x_0[:,0],x_0[:,1],color='red')
 plt.scatter(x_1[:,0],x_1[:,1],color='blue')
