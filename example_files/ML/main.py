@@ -1,48 +1,38 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn import svm
 
-np.random.seed(1)
+x_train = [[10, 50], [20, 30], [25, 30], [20, 60], [15, 70], [40, 40], [30, 45], [20, 45], [40, 30], [7, 35]]
+x_train = [x + [1] for x in x_train]
+y_train = [-1, 1, 1, -1, -1, 1, 1, -1, 1, -1]
 
-r1=.7
-D1=1.0
-mean1=[0,-3]
-V1=[[D1,D1*r1],[D1*r1,D1]]
+clf=svm.SVC(kernel='linear')
+clf.fit(x_train,y_train)
 
-r2=.7
-D2=1.0
-mean2=[0,3]
-V2=[[D2,D2*r2],[D2*r2,D2]]
+line_clf=svm.LinearSVC()
+line_clf.fit(x_train,y_train)
 
-N=1000
-x1=np.random.multivariate_normal(mean1,V1,N).T
-x2=np.random.multivariate_normal(mean2,V2,N).T
+v=clf.support_vectors_
+w=line_clf.coef_[0]
 
-mm1=np.mean(x1.T,axis=0)
-mm2=np.mean(x2.T,axis=0)
+print(w,v,sep='\n')
 
-a=(x1.T-mm1).T
+x_train=np.array(x_train)
+y_train=np.array(y_train)
+line_x=list(range(max(x_train[:,0])))
+line_y=[-x*w[0]/w[1] - w[2] for x in line_x]
 
-VV1 = np.array([[np.dot(a[0], a[0]) / N, np.dot(a[0], a[1]) / N],
-                [np.dot(a[1], a[0]) / N, np.dot(a[1], a[1]) / N]])
+x_0=x_train[y_train==1]
+x_1=x_train[y_train==-1]
 
-a = (x2.T - mm2).T
-VV2 = np.array([[np.dot(a[0], a[0]) / N, np.dot(a[0], a[1]) / N],
-                [np.dot(a[1], a[0]) / N, np.dot(a[1], a[1]) / N]])
+plt.scatter(x_0[:, 0], x_0[:, 1], color='red')
+plt.scatter(x_1[:, 0], x_1[:, 1], color='blue')
+plt.scatter(v[:, 0], v[:, 1], s=70, edgecolor=None, linewidths=0, marker='s')
+plt.plot(line_x, line_y, color='green')
 
-Py1,L1=.5,1
-Py2,L2=1-Py1,1
-
-b = lambda x, v, m, l, py: np.log(l * py) - 0.5 * (x - m) @ np.linalg.inv(v) @ (x - m).T - 0.5 * np.log(
-    np.linalg.det(v))
-
-x=np.array([0,-4])
-
-a=np.argmax([b(x, VV1, mm1, L1, Py1), b(x, VV2, mm2, L2, Py2)])
-
-print(a)
-
-plt.figure(figsize=(7,5))
-plt.title(f'Correlation: r1= {r1}, r2 = {r2}')
-plt.scatter(x1[0],x1[1],s=10)
-plt.scatter(x2[0],x2[1],s=10)
+plt.xlim([0, 45])
+plt.ylim([0, 75])
+plt.ylabel("length")
+plt.xlabel("width")
+plt.grid(True)
 plt.show()
