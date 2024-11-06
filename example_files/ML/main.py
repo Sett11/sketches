@@ -1,18 +1,19 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn import tree
+from sklearn.ensemble import RandomForestRegressor
 
-x=np.arange(0,np.pi,.1).reshape(-1,1)
-y=np.cos(x)
+x=np.arange(0,np.pi,.1)
+n_samles=len(x)
+y=np.cos(x)+np.random.normal(.0,.1,n_samles)
+x=x.reshape(-1,1)
 
-clf=tree.DecisionTreeRegressor(max_depth=3)
-clf=clf.fit(x,y)
+clf=RandomForestRegressor(max_depth=2,n_estimators=10,random_state=1)
+clf.fit(x,y)
 yy=clf.predict(x)
 
-# tree.plot_tree(clf)
 plt.plot(x, y, label="cos(x)")
 plt.plot(x, yy, label="DT Regression")
 plt.grid()
 plt.legend()
-plt.title('max_depth=3')
+plt.title('Four trees in depth two')
 plt.show()
