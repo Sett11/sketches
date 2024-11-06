@@ -1,36 +1,50 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
-x=np.arange(0,10,.1)
-x_est=np.arange(0,10,.01)
+x=[(98, 62), (80, 95), (71, 130), (89, 164), (137, 115), (107, 155), (109, 105), (174, 62), (183, 115), (164, 153),
+     (142, 174), (140, 80), (308, 123), (229, 171), (195, 237), (180, 298), (179, 340), (251, 262), (300, 176),
+     (346, 178), (311, 237), (291, 283), (254, 340), (215, 308), (239, 223), (281, 207), (283, 156)]
 
-N=len(x)
+M=np.mean(x,axis=0)
+D=np.var(x,axis=0)
+K=3
+COLORS=('green', 'blue', 'brown', 'black')
 
-y_sin=np.sin(x)
-y=y_sin+np.random.normal(0,.5,N)
+ma=[np.random.normal(M,np.sqrt(D/10),2) for _ in range(K)]
+ro=lambda x,y:np.mean((x-y)**2)
 
-h=1.0
+plt.ion()
+n=0
+while n<10:
+    X=[[] for _ in range(K)]
+    for i in x:
+        r=[ro(i,j) for j in ma]
+        X[np.argmin(r)].append(i)
+    ma=[np.mean(xx,axis=0) for xx in X]
 
-K=lambda r:np.exp(-2*r*r)
+    plt.clf()
+    for i in range(K):
+        xx = np.array(X[i]).T
+        plt.scatter(xx[0], xx[1], s=10, color=COLORS[i])
 
-ro=lambda xx,xi:np.abs(xx-xi)
-w=lambda xx,xi:K(ro(xx,xi)/h)
+    mx = [m[0] for m in ma]
+    my = [m[1] for m in ma]
+    plt.scatter(mx, my, s=50, color='red')
 
-plt.figure(figsize=(7,7))
-plot_number=0
+    plt.draw()
+    plt.gcf().canvas.flush_events()
+    # plt.savefig(f"lloyd {n+1}.png")
+    time.sleep(0.2)
+    n+=1
 
-for h in [.1,.3,1,10]:
-    y_est=[]
-    for xx in x_est:
-        ww=np.array([w(xx,xi) for xi in x])
-        yy=np.dot(ww,y)/sum(ww)
-        y_est.append(yy)
-    plot_number+=1
-    plt.subplot(2,2,plot_number)
-    plt.scatter(x, y, color='black', s=10)
-    plt.plot(x, y_sin, color='blue')
-    plt.plot(x_est, y_est, color='red')
-    plt.title(f"Gaussian window h = {h}")
-    plt.grid()
+plt.ioff()
 
+for i in range(K):
+    xx=np.array(X[i]).T
+    plt.scatter(xx[0],xx[1],s=10,color=COLORS[i])
+
+mx=[i[0] for i in ma]
+my=[i[1] for i in ma]
+plt.scatter(mx,my,s=50,color='red')
 plt.show()
