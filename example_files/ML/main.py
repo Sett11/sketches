@@ -1,26 +1,22 @@
-from itertools import cycle
-import matplotlib.pyplot as plt
 import numpy as np
-from scipy.cluster.hierarchy import dendrogram
-from sklearn.cluster import AgglomerativeClustering
+import matplotlib.pyplot as plt
+from sklearn.tree import DecisionTreeClassifier,DecisionTreeRegressor,plot_tree
+from sklearn import datasets
 
-def plot_dendrogram(model,**kwargs):
-    children=model.children_
-    distance=np.arange(children.shape[0])
-    no_of_observations=np.arange(2,children.shape[0]+2)
-    linkage_matrix=np.column_stack([children,distance,no_of_observations]).astype(float)
-    dendrogram(linkage_matrix,**kwargs)
+def get_grid(data):
+    x_min,x_max=data[:,0].min()-1,data[:,0].max()+1
+    y_min,y_max=data[:,1].min()-1,data[:,1].max()+1
+    return np.meshgrid(np.arange(x_min,x_max,.01),np.arange(y_min,y_max,.01))
 
-x=np.array([(89, 151), (114, 120), (156, 110), (163, 153), (148, 215), (170, 229), (319, 166), (290, 178), (282, 222)])
-NC=3
+iris=datasets.load_iris()
+train_data=np.c_[iris.data[:,0].reshape(-1,1),iris.data[:,2].reshape(-1,1)]
+train_labels=iris.target
 
-clustering=AgglomerativeClustering(n_clusters=NC,linkage='ward')
-x_pr=clustering.fit_predict(x)
+clf_tree=DecisionTreeClassifier(criterion='entropy',max_depth=3,random_state=5)
+clf_tree.fit(train_data,train_labels)
 
-f,ax=plt.subplots(1,2)
-for c,n in zip(cycle('bgrcmykgrcmykgrcmykgrcmykgrcmykgrcmyk'),range(NC)):
-    clst=x[x_pr==n].T
-    ax[0].scatter(clst[0],clst[1],s=10,color=c)
-
-plot_dendrogram(clustering,ax=ax[1])
+xx,yy=get_grid(train_data)
+predicted=clf_tree.predict(np.c_[xx.ravel(),yy.ravel()]).reshape(xx.shape)
+plt.pcolormesh(xx, yy, predicted, cmap='spring', shading='auto')
+plt.scatter(train_data[:, 0], train_data[:, 1], c=train_labels, s=50, cmap='spring', edgecolors='black', linewidth=1.5)
 plt.show()
