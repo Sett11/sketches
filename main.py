@@ -1,22 +1,39 @@
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+np.random.seed(42)
 
-def ferh_eq(n):
-    r,x,a=2.5,.25,[[1]*n for _ in range(n)]
-    f=lambda x:'\n'.join(''.join('-' if j==1 else '+' for j in i) for i in zip(*x))
-    ff=lambda x:sum((sum(i)-n)/len(i) for i in x)/len(x)
-    while r<4:
-        for i in range(1,100):
-            x=r*x*(1-x)
-            if i>50:
-                xs=round(((r-2.5)/1.5)*(n-1))
-                ys=round((1-x)*(n-1))
-                a[xs][ys]+=1
-        r+=.0001
-        d=np.linalg.det(a)
-        if d:
-            print(True,d,r,ff(a))
-            return f(a)
-    print(False,f(a),sep='\n')
-    return r,ff(a)
+N=50
+K=np.random.randint(-1,31)
 
-print(ferh_eq(111))
+def one_iteration_for_game_of_life(a):
+    n,m,r=len(a),len(a[0]),[]
+    for i in range(n):
+        for j in range(m):
+            t=[a[x,y] for x,y in [(i+K,j),(i-K,j),(i,j+K),(i,j-K),(i+K,j+K),(i-K,j-K),(i+K,j-K),(i-K,j+K)] if 0<=x<n and 0<=y<m and a[x,y]]
+            if a[i,j] and len(t) not in [2,3]:
+                r.append((i,j,0))
+            if not a[i,j] and len(t)==3:
+                r.append((i,j,1))
+    for i,j,k in r:
+        a[i,j]=k
+    return a
+
+board=np.random.choice([0,1],size=(N,N))
+fig,ax=plt.subplots()
+im=ax.imshow(board,cmap='plasma_r',interpolation='bilinear')
+ax.axis('off')
+
+# memo=set()
+# f=lambda x:tuple(tuple(i) for i in x)
+
+def up(k):
+    global board,memo
+    board=one_iteration_for_game_of_life(board)
+    im.set_data(board)
+    return [im]
+
+anim=FuncAnimation(fig,up,frames=200,interval=200,blit=True)
+# plt.show()
+print(62/100)
+# anim.save('game_of_life.gif', writer='imagemagick', fps=10)
