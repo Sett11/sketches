@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 np.random.seed(42)
 
-N=50
-K=np.random.randint(-1,31)
+N=100
+K=1
 
 def one_iteration_for_game_of_life(a):
     n,m,r=len(a),len(a[0]),[]
@@ -24,16 +24,13 @@ fig,ax=plt.subplots()
 im=ax.imshow(board,cmap='plasma_r',interpolation='bilinear')
 ax.axis('off')
 
-# memo=set()
-# f=lambda x:tuple(tuple(i) for i in x)
 
-def up(k):
+def up(_):
     global board,memo
     board=one_iteration_for_game_of_life(board)
     im.set_data(board)
     return [im]
 
 anim=FuncAnimation(fig,up,frames=200,interval=200,blit=True)
-# plt.show()
-print(62/100)
+plt.show()
 # anim.save('game_of_life.gif', writer='imagemagick', fps=10)
