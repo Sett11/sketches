@@ -1,11 +1,29 @@
-from re import sub
-from itertools import permutations
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+from matplotlib.patches import Rectangle
 
-alf='AAABBBCCC'
+N = 20
+board = np.random.randint(low=0,high=256,size=(N, N))
+fig, ax = plt.subplots()
+im = ax.imshow(board, cmap='plasma', interpolation='nearest')
+ax.axis('off')
 
-def f(s):
-    return len(sub(r'(.)\1*',lambda x:(k:=x.group())[0]+str(len(k)),s))<len(s)
+def one_iteration_for_game_of_life(a):
+    return np.random.randint(low=0, high=256, size=(N, N))
 
-a=set([''.join(i) for i in permutations(alf)])
+def create_mask(ax, N):
+    for i in range(N):
+        for j in range(N):
+            rect = Rectangle((j, i), 1, 1, linewidth=0, edgecolor='none', facecolor='none',zorder=2, clip_path=None)
+            ax.add_patch(rect)
 
-print((len(a)-len(list(filter(f,a))))/len(a))
+def up(k):
+    global board
+    board = one_iteration_for_game_of_life(board)
+    im.set_data(board)
+    return [im]
+
+create_mask(ax, N)
+anim = FuncAnimation(fig, up, frames=200, interval=200, blit=True)
+plt.show()
