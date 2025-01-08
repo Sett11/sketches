@@ -2,12 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from collections import defaultdict
-np.random.seed(11)
 
+np.random.seed(17)
 N=79
 K=1
 L=221
-E=2
+E=4
 R=np.array(range(1,256))
 
 board=np.random.choice(R,size=(N,N))
