@@ -3,11 +3,11 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from collections import defaultdict
 
-np.random.seed(17)
-N=69
-K=3
-L=221
-E=5
+np.random.seed(13)
+N=110
+K=1
+L=229
+E=3
 R=np.array(range(1,256))
 
 board=np.random.choice(R,size=(N,N))
