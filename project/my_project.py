@@ -4,8 +4,8 @@ from matplotlib.animation import FuncAnimation
 from collections import defaultdict
 
 np.random.seed(17)
-N=79
-K=1
+N=69
+K=3
 L=221
 E=5
 R=np.array(range(1,256))
@@ -32,6 +32,10 @@ def one(a):
                     all_blobs.add((x,y))
                     r[i].append((x,y))
                     a[x,y]=i
+                # else:
+                #     if i>z:
+                #         a[x,y]=i
+                #         r[i].append((x,y))
 
     for i in r:
         blobs[i].extend(r[i])
@@ -45,6 +49,13 @@ def one(a):
                     R=np.fromiter([k for k in R if k!=x],dtype='int32')
                     blobs[a[i,j]].append((i,j))
                     all_blobs.add((i,j))
+                # else:
+                #     for k in blobs:
+                #         if (i,j) in blobs[k] and x>k:
+                #             blobs[k].remove((i,j))
+                #             blobs[x].append((i,j))
+                #             a[i,j]=x
+                #             break
             if (i,j) not in all_blobs:
                 a[i,j]=np.random.choice(R)
                 
