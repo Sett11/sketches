@@ -3,11 +3,11 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from collections import defaultdict
 
-np.random.seed(13)
+np.random.seed(23)
 N=110
 K=1
-L=229
-E=3
+L=220
+E=7
 R=np.array(range(1,256))
 
 board=np.random.choice(R,size=(N,N))
@@ -71,4 +71,4 @@ def up(k):
 anim=FuncAnimation(fig,up,frames=200,interval=200,blit=True)
 plt.show()
 
-# anim.save('project.gif',writer='Pillow',fps=10)
+anim.save('project_1.gif')
