@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from collections import defaultdict
 
-np.random.seed(29)
+np.random.seed(21)
 N=89
 K=1
 L=220
@@ -71,4 +71,4 @@ def up(k):
 anim=FuncAnimation(fig,up,frames=200,interval=200,blit=True)
 plt.show()
 
-anim.save('project_1.gif',writer='imagemagick',fps=10)
+# anim.save('project_1.gif',writer='imagemagick',fps=10)
