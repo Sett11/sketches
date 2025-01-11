@@ -4,10 +4,10 @@ from matplotlib.animation import FuncAnimation
 from collections import defaultdict
 
 np.random.seed(21)
-N=89
-K=1
+N=79
+K=2
 L=220
-E=7
+E=5
 R=np.array(range(1,256))
 
 board=np.random.choice(R,size=(N,N))
