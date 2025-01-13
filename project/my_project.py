@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from collections import defaultdict
 
-np.random.seed(21)
+np.random.seed(9)
 N=81
 K=1
 L=220
