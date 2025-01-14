@@ -4,7 +4,7 @@ from matplotlib.animation import FuncAnimation
 from collections import defaultdict
 
 np.random.seed(9)
-N=81
+N=79
 K=1
 L=220
 E=7
