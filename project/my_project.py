@@ -71,4 +71,4 @@ def up(k):
 anim=FuncAnimation(fig,up,frames=200,interval=200,blit=True)
 plt.show()
 
-# anim.save('project_1.gif',writer='imagemagick',fps=10)
+anim.save('project_1.gif',writer='imagemagick',fps=10)
