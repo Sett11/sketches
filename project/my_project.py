@@ -5,7 +5,7 @@ from collections import defaultdict
 
 np.random.seed(77)
 N=77
-K=1
+K=2
 L=220
 E=5
 R=np.array(range(1,256))
@@ -58,6 +58,6 @@ def up(k):
 
 anim = FuncAnimation(fig, up, frames=200, interval=200, blit=True)
 
-anim.save('animation.gif', writer='pillow', fps=5)
+# anim.save('animation.gif', writer='pillow', fps=5)
 
 plt.show()
