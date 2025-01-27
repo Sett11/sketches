@@ -5,7 +5,7 @@ from collections import defaultdict
 
 np.random.seed(77)
 N=78
-K=1
+K=2
 L=210
 E=3
 R=np.array(range(1,256))
