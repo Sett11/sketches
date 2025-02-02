@@ -7,7 +7,7 @@ np.random.seed(77)
 N=78
 K=1
 L=210
-E=5
+E=7
 R=np.array(range(1,256))
 
 board=np.random.choice(R,size=(N,N))
