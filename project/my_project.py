@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from collections import defaultdict
 
+
 np.random.seed(77)
 N=77
 K=1
