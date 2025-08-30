@@ -1,9 +1,0 @@
-numpy:
-scipy:
-matplotlib:
-gmpy2:
-sympy:
-requests:
-tkinder:
-beautifulsoup4:
-jinja2:
