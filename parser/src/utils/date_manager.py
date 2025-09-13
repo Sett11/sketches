@@ -17,14 +17,21 @@ class DateManager:
     def generate_date_ranges(self, start_date, end_date):
         """Генерировать диапазоны дат с заданным шагом"""
         ranges = []
-        current_start = start_date
         
-        while current_start < end_date:
-            current_end = min(current_start + timedelta(days=self.date_step), end_date)
+        # Нормализация дат к полуночи (00:00:00)
+        current_start = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = end_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        while current_start <= end_date:
+            # Вычисляем current_end так, чтобы каждый диапазон охватывал точно date_step дней
+            current_end = min(current_start + timedelta(days=self.date_step - 1), end_date)
+            
             ranges.append({
                 "start": current_start.strftime("%Y-%m-%dT00:00:00"),
                 "end": current_end.strftime("%Y-%m-%dT23:59:59")
             })
+            
+            # Переходим к следующему окну
             current_start = current_end + timedelta(days=1)
         
         return ranges

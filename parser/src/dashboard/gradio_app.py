@@ -4,21 +4,18 @@
 import gradio as gr
 import json
 import os
-import sys
 from datetime import datetime, timedelta
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-from src.core.batch_parser import batch_parser
-from src.utils.cookie_manager import cookie_manager
-from src.utils.date_manager import date_manager
-from config.settings import DOCS_DIR, LOGS_DIR
+from ..core.batch_parser import create_batch_parser
+from ..utils.cookie_manager import cookie_manager
+from ..utils.date_manager import date_manager
+from ...config.settings import DOCS_DIR, LOGS_DIR
 
 class GradioDashboard:
     """Простой дашборд для управления парсером"""
     
     def __init__(self):
-        self.parser = batch_parser
+        self.parser = create_batch_parser()
     
     def start_parsing(self, start_date, end_date, cookies_text):
         """Запустить парсинг"""

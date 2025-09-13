@@ -11,9 +11,32 @@ from config.settings import EXCLUDE_KEYWORDS, INCLUDE_KEYWORDS
 class DocumentFilter:
     """Простой фильтр документов"""
     
-    def __init__(self):
-        self.exclude_patterns = [re.compile(keyword, re.IGNORECASE) for keyword in EXCLUDE_KEYWORDS]
-        self.include_patterns = [re.compile(keyword, re.IGNORECASE) for keyword in INCLUDE_KEYWORDS]
+    def __init__(self, exclude_keywords=None, include_keywords=None, 
+                 exclude_is_regex=False, include_is_regex=False):
+        """
+        Инициализация фильтра документов
+        
+        Args:
+            exclude_keywords: Список ключевых слов для исключения (по умолчанию из настроек)
+            include_keywords: Список ключевых слов для включения (по умолчанию из настроек)
+            exclude_is_regex: Если True, exclude_keywords обрабатываются как regex (по умолчанию False)
+            include_is_regex: Если True, include_keywords обрабатываются как regex (по умолчанию False)
+        """
+        # Используем переданные параметры или значения по умолчанию из настроек
+        exclude_keywords = exclude_keywords if exclude_keywords is not None else EXCLUDE_KEYWORDS
+        include_keywords = include_keywords if include_keywords is not None else INCLUDE_KEYWORDS
+        
+        # Компилируем паттерны для исключения
+        if exclude_is_regex:
+            self.exclude_patterns = [re.compile(keyword, re.IGNORECASE) for keyword in exclude_keywords]
+        else:
+            self.exclude_patterns = [re.compile(re.escape(keyword), re.IGNORECASE) for keyword in exclude_keywords]
+        
+        # Компилируем паттерны для включения
+        if include_is_regex:
+            self.include_patterns = [re.compile(keyword, re.IGNORECASE) for keyword in include_keywords]
+        else:
+            self.include_patterns = [re.compile(re.escape(keyword), re.IGNORECASE) for keyword in include_keywords]
     
     def should_exclude(self, text):
         """Проверить нужно ли исключить документ"""
@@ -39,11 +62,20 @@ class DocumentFilter:
     
     def filter_document(self, document_text, document_title=""):
         """Фильтровать документ по тексту и заголовку"""
-        full_text = f"{document_title} {document_text}".lower()
+        # Нормализуем None входы в пустые строки
+        document_title = document_title if document_title is not None else ""
+        document_text = document_text if document_text is not None else ""
+        
+        # Создаем полный текст без lower() - используем re.IGNORECASE
+        full_text = f"{document_title} {document_text}"
         
         # Исключаем если есть исключающие слова
         if self.should_exclude(full_text):
             return False
+        
+        # Если список include_keywords пустой, возвращаем True (не исключаем все)
+        if not self.include_patterns:
+            return True
         
         # Включаем если есть включающие слова
         return self.should_include(full_text)

@@ -1,9 +1,15 @@
 """
 Простой тест для проверки API kad.arbitr.ru
 """
+import os
 import requests
 import json
+import pytest
 
+@pytest.mark.skipif(
+    os.getenv("KAD_SMOKE") != "1",
+    reason="Тест требует KAD_SMOKE=1 для запуска (пропускается по умолчанию для избежания нестабильности CI)"
+)
 def test_kad_arbitr_api():
     """Тестируем API kad.arbitr.ru"""
     print("🧪 Тестирование API kad.arbitr.ru")

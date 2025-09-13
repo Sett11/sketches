@@ -4,14 +4,15 @@
 import sys
 import os
 
-# Добавляем текущую директорию в путь для импортов
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 from src.dashboard.gradio_app import GradioDashboard
 from src.utils.logger import logger
+from config.settings import ensure_dirs
 
 def main():
     """Главная функция"""
+    # Инициализируем файловую систему
+    ensure_dirs()
+    
     logger.info("Запуск парсера арбитражных дел")
     
     try:
