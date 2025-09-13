@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from ..core.batch_parser import create_batch_parser
 from ..utils.cookie_manager import cookie_manager
 from ..utils.date_manager import date_manager
-from ...config.settings import DOCS_DIR, LOGS_DIR
+from config.settings import DOCS_DIR, LOGS_DIR
 
 class GradioDashboard:
     """Простой дашборд для управления парсером"""

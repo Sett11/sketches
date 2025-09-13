@@ -11,7 +11,7 @@ from ..utils.logger import logger
 from ..utils.cookie_manager import cookie_manager
 from ..utils.rate_limiter import rate_limiter, DailyLimitExceeded
 from ..utils.document_filter import document_filter
-from ...config.settings import URLS, PARSING_SETTINGS, USER_AGENT, DOCS_DIR, ensure_dirs, build_default_search_params
+from config.settings import URLS, PARSING_SETTINGS, USER_AGENT, DOCS_DIR, ensure_dirs, build_default_search_params, SEARCH_REQUEST_CONFIG
 
 class BatchParser:
     """Основной класс для батчевого парсинга"""
@@ -52,41 +52,120 @@ class BatchParser:
             self.session.cookies.set(name, value)
         logger.info(f"Установлено {len(cookies_dict)} cookies")
     
+    def check_anti_bot_protection(self):
+        """Проверить наличие anti-bot защиты и необходимых токенов"""
+        logger.info("🔍 Проверка anti-bot защиты...")
+        
+        # Проверяем наличие обязательных cookies
+        missing_cookies = []
+        for cookie_name in SEARCH_REQUEST_CONFIG.get("required_cookies", []):
+            if not self.session.cookies.get(cookie_name):
+                missing_cookies.append(cookie_name)
+        
+        if missing_cookies:
+            logger.warning(f"⚠️ Отсутствуют обязательные cookies: {missing_cookies}")
+            logger.warning("⚠️ Рекомендуется получить cookies из реального браузера")
+            return False
+        
+        # Делаем тестовый запрос для проверки anti-bot
+        test_data = SEARCH_REQUEST_CONFIG["json_template"].copy()
+        test_data.update({
+            "Count": 1,
+            "Page": 1,
+            "DateFrom": "2024-01-01",
+            "DateTo": "2024-01-01"
+        })
+        
+        try:
+            headers = SEARCH_REQUEST_CONFIG["headers"].copy()
+            response = self.session.post(
+                URLS["search_endpoint"],
+                json=test_data,
+                headers=headers,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                logger.info("✅ Anti-bot защита обойдена успешно")
+                return True
+            elif response.status_code == 403:
+                logger.error("❌ Anti-bot защита активна - запрос заблокирован")
+                logger.error("❌ Необходимо обновить WASM токен или использовать прокси")
+                return False
+            else:
+                logger.warning(f"⚠️ Неожиданный статус ответа: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Ошибка при проверке anti-bot защиты: {e}")
+            return False
+    
     def search_documents(self, date_from, date_to, page=1):
         """Поиск документов за указанный период"""
-        # Упрощенный поиск для kad.arbitr.ru
-        search_data = {
+        # Проверяем anti-bot защиту перед выполнением запроса
+        if SEARCH_REQUEST_CONFIG.get("anti_bot_warning", False):
+            logger.warning("⚠️ ВНИМАНИЕ: Эндпоинт требует обхода anti-bot защиты!")
+            logger.warning("⚠️ Необходим WASM токен или валидные cookies для успешного запроса")
+        
+        # Создаем правильную схему запроса согласно API
+        search_data = SEARCH_REQUEST_CONFIG["json_template"].copy()
+        search_data.update({
             "Count": PARSING_SETTINGS["items_per_page"],
             "Page": page,
             "DateFrom": date_from,
-            "DateTo": date_to,
-            "Text": ""
-        }
+            "DateTo": date_to
+        })
+        
+        # Проверяем наличие обязательных cookies
+        missing_cookies = []
+        for cookie_name in SEARCH_REQUEST_CONFIG.get("required_cookies", []):
+            if not self.session.cookies.get(cookie_name):
+                missing_cookies.append(cookie_name)
+        
+        if missing_cookies:
+            logger.warning(f"⚠️ Отсутствуют обязательные cookies: {missing_cookies}")
+            logger.warning("⚠️ Запрос может быть заблокирован anti-bot системой")
         
         try:
             rate_limiter.make_request()
+            
+            # Используем заголовки из конфигурации
+            headers = SEARCH_REQUEST_CONFIG["headers"].copy()
             response = self.session.post(
                 URLS["search_endpoint"],
                 json=search_data,
+                headers=headers,
                 timeout=PARSING_SETTINGS["timeout_seconds"]
             )
             
             if response.status_code == 200:
-                data = response.json()
-                # Пробуем разные возможные поля для списка документов
-                documents = data.get('items', []) or data.get('documents', []) or data.get('results', []) or data.get('data', [])
-                logger.info(f"Получено {len(documents)} документов на странице {page}")
-                return documents
+                try:
+                    data = response.json()
+                    # Пробуем разные возможные поля для списка документов
+                    documents = data.get('items', []) or data.get('documents', []) or data.get('results', []) or data.get('data', [])
+                    logger.info(f"✅ Получено {len(documents)} документов на странице {page}")
+                    return documents
+                except ValueError as e:
+                    logger.error(f"❌ Ошибка парсинга JSON ответа: {e}")
+                    logger.error(f"Ответ сервера: {response.text[:500]}")
+                    return []
+            elif response.status_code == 403:
+                logger.error("❌ Доступ запрещен (403) - возможно сработала anti-bot защита")
+                logger.error("❌ Требуется обновить WASM токен или cookies")
+                return []
+            elif response.status_code == 429:
+                logger.warning("⚠️ Слишком много запросов (429) - rate limiting")
+                return []
             else:
-                logger.error(f"Ошибка поиска: {response.status_code}")
+                logger.error(f"❌ Ошибка поиска: {response.status_code}")
                 logger.error(f"Ответ сервера: {response.text[:500]}")
                 return []
                 
         except DailyLimitExceeded as e:
-            logger.warning(f"Достигнут дневной лимит запросов: {e}")
+            logger.warning(f"⚠️ Достигнут дневной лимит запросов: {e}")
             return []
         except Exception as e:
-            logger.error(f"Ошибка при поиске документов: {e}")
+            logger.error(f"❌ Ошибка при поиске документов: {e}")
             return []
     
     def download_pdf(self, file_url, case_id, filename):
@@ -128,6 +207,7 @@ class BatchParser:
         logger.info(f"Обработка периода: {date_from} - {date_to}")
         
         all_documents = []
+        success_count = 0  # Счетчик успешно скачанных файлов
         
         # Получаем все страницы для данного диапазона
         for page in range(1, PARSING_SETTINGS["max_pages"] + 1):
@@ -154,6 +234,8 @@ class BatchParser:
                     safe_case_id = self.sanitize_case_id(case_id)
                     filename = f"{safe_case_id}.pdf"
                     if self.download_pdf(file_url, case_id, filename):
+                        # Увеличиваем счетчик успешных загрузок
+                        success_count += 1
                         # Сохраняем метаданные
                         self.metadata.append({
                             "case_id": case_id,
@@ -165,7 +247,7 @@ class BatchParser:
                 logger.warning("Достигнут дневной лимит запросов, прекращаем скачивание")
                 break
         
-        return len(all_documents)
+        return success_count
     
     def save_metadata(self):
         """Сохранить метаданные в JSON файл с атомарной записью"""
@@ -201,6 +283,39 @@ class BatchParser:
             "downloaded_count": self.downloaded_count,
             "rate_limiter_status": rate_limiter.get_status()
         }
+    
+    def validate_endpoint_readiness(self):
+        """Проверить готовность эндпоинта к использованию"""
+        logger.info("🔍 Проверка готовности эндпоинта...")
+        
+        # Проверяем конфигурацию
+        if not SEARCH_REQUEST_CONFIG.get("anti_bot_warning", False):
+            logger.warning("⚠️ Anti-bot защита не настроена в конфигурации")
+            return False
+        
+        # Проверяем наличие обязательных cookies
+        missing_cookies = []
+        for cookie_name in SEARCH_REQUEST_CONFIG.get("required_cookies", []):
+            if not self.session.cookies.get(cookie_name):
+                missing_cookies.append(cookie_name)
+        
+        if missing_cookies:
+            logger.error(f"❌ Эндпоинт НЕ готов к использованию")
+            logger.error(f"❌ Отсутствуют обязательные cookies: {missing_cookies}")
+            logger.error("❌ Рекомендации:")
+            logger.error("   1. Получите cookies из реального браузера")
+            logger.error("   2. Используйте прокси с обходом anti-bot")
+            logger.error("   3. Реализуйте генерацию WASM токена")
+            return False
+        
+        # Делаем тестовый запрос
+        if self.check_anti_bot_protection():
+            logger.info("✅ Эндпоинт готов к использованию")
+            return True
+        else:
+            logger.error("❌ Эндпоинт НЕ готов к использованию")
+            logger.error("❌ Anti-bot защита блокирует запросы")
+            return False
 
 def create_batch_parser():
     """Factory функция для создания экземпляра BatchParser"""

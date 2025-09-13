@@ -4,9 +4,40 @@
 import re
 import sys
 import os
+import logging
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from config.settings import EXCLUDE_KEYWORDS, INCLUDE_KEYWORDS
+
+# Настройка логгера
+logger = logging.getLogger(__name__)
+
+def _normalize_keywords(keywords, default_keywords):
+    """
+    Нормализация ключевых слов: конвертация в список, удаление пробелов и пустых строк
+    
+    Args:
+        keywords: Входные ключевые слова (строка, список или None)
+        default_keywords: Ключевые слова по умолчанию
+        
+    Returns:
+        list: Нормализованный список непустых ключевых слов
+    """
+    if keywords is None:
+        return default_keywords
+    
+    # Конвертируем строку в список
+    if isinstance(keywords, str):
+        keywords = [keywords]
+    
+    # Убираем пробелы и пустые строки
+    normalized = [kw.strip() for kw in keywords if kw and kw.strip()]
+    
+    # Если результат пустой, используем значения по умолчанию
+    if not normalized:
+        return default_keywords
+    
+    return normalized
 
 class DocumentFilter:
     """Простой фильтр документов"""
@@ -22,21 +53,50 @@ class DocumentFilter:
             exclude_is_regex: Если True, exclude_keywords обрабатываются как regex (по умолчанию False)
             include_is_regex: Если True, include_keywords обрабатываются как regex (по умолчанию False)
         """
-        # Используем переданные параметры или значения по умолчанию из настроек
-        exclude_keywords = exclude_keywords if exclude_keywords is not None else EXCLUDE_KEYWORDS
-        include_keywords = include_keywords if include_keywords is not None else INCLUDE_KEYWORDS
+        # Нормализуем входные данные
+        exclude_keywords = _normalize_keywords(exclude_keywords, EXCLUDE_KEYWORDS)
+        include_keywords = _normalize_keywords(include_keywords, INCLUDE_KEYWORDS)
         
-        # Компилируем паттерны для исключения
-        if exclude_is_regex:
-            self.exclude_patterns = [re.compile(keyword, re.IGNORECASE) for keyword in exclude_keywords]
-        else:
-            self.exclude_patterns = [re.compile(re.escape(keyword), re.IGNORECASE) for keyword in exclude_keywords]
+        # Безопасно компилируем паттерны для исключения
+        self.exclude_patterns = self._compile_patterns_safely(exclude_keywords, exclude_is_regex, "exclude")
         
-        # Компилируем паттерны для включения
-        if include_is_regex:
-            self.include_patterns = [re.compile(keyword, re.IGNORECASE) for keyword in include_keywords]
-        else:
-            self.include_patterns = [re.compile(re.escape(keyword), re.IGNORECASE) for keyword in include_keywords]
+        # Безопасно компилируем паттерны для включения
+        self.include_patterns = self._compile_patterns_safely(include_keywords, include_is_regex, "include")
+    
+    def _compile_patterns_safely(self, keywords, is_regex, pattern_type):
+        """
+        Безопасная компиляция регулярных выражений с обработкой ошибок
+        
+        Args:
+            keywords: Список ключевых слов для компиляции
+            is_regex: Если True, обрабатывать как regex, иначе экранировать
+            pattern_type: Тип паттерна для логирования ("exclude" или "include")
+            
+        Returns:
+            list: Список успешно скомпилированных regex объектов
+        """
+        patterns = []
+        
+        for keyword in keywords:
+            try:
+                if is_regex:
+                    # Компилируем как regex
+                    pattern = re.compile(keyword, re.IGNORECASE)
+                else:
+                    # Экранируем специальные символы
+                    pattern = re.compile(re.escape(keyword), re.IGNORECASE)
+                
+                patterns.append(pattern)
+                
+            except re.error as e:
+                # Логируем ошибку и пропускаем невалидный паттерн
+                logger.warning(f"Не удалось скомпилировать {pattern_type} паттерн '{keyword}': {e}. Паттерн пропущен.")
+                continue
+        
+        if not patterns:
+            logger.warning(f"Не удалось скомпилировать ни одного {pattern_type} паттерна. Используется пустой список.")
+        
+        return patterns
     
     def should_exclude(self, text):
         """Проверить нужно ли исключить документ"""

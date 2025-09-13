@@ -12,19 +12,67 @@ class DateManager:
     """Простой менеджер диапазонов дат"""
     
     def __init__(self):
-        self.date_step = PARSING_SETTINGS["date_step_days"]
+        self.date_step = self._validate_date_step(PARSING_SETTINGS["date_step_days"])
+    
+    def _validate_date_step(self, date_step):
+        """
+        Валидировать и привести date_step к безопасному значению
+        
+        Args:
+            date_step: Значение шага даты (может быть int, float, str)
+            
+        Returns:
+            int: Валидированное значение >= 1
+            
+        Raises:
+            ValueError: Если значение не может быть приведено к допустимому
+        """
+        try:
+            # Приводим к int, если возможно
+            if isinstance(date_step, str):
+                date_step = int(float(date_step))  # Сначала float, потом int для обработки "2.0"
+            elif isinstance(date_step, float):
+                date_step = int(date_step)
+            elif not isinstance(date_step, int):
+                date_step = int(date_step)
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"date_step должен быть числом, получено: {date_step} ({type(date_step).__name__})") from e
+        
+        # Проверяем, что значение положительное
+        if date_step < 1:
+            raise ValueError(f"date_step должен быть >= 1, получено: {date_step}")
+        
+        return date_step
     
     def generate_date_ranges(self, start_date, end_date):
         """Генерировать диапазоны дат с заданным шагом"""
         ranges = []
         
+        # Валидация входных параметров
+        if not isinstance(start_date, datetime):
+            raise ValueError(f"start_date должен быть объектом datetime, получено: {type(start_date).__name__}")
+        if not isinstance(end_date, datetime):
+            raise ValueError(f"end_date должен быть объектом datetime, получено: {type(end_date).__name__}")
+        
         # Нормализация дат к полуночи (00:00:00)
         current_start = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
         end_date = end_date.replace(hour=0, minute=0, second=0, microsecond=0)
         
-        while current_start <= end_date:
+        # Проверяем, что start_date не позже end_date
+        if current_start > end_date:
+            raise ValueError(f"start_date ({current_start}) не может быть позже end_date ({end_date})")
+        
+        # Дополнительная защита: убеждаемся, что date_step валиден
+        # (хотя это уже проверено в конструкторе, но для безопасности)
+        safe_date_step = max(1, self.date_step)
+        
+        # Счетчик итераций для защиты от бесконечного цикла
+        max_iterations = 10000  # Разумный лимит
+        iteration_count = 0
+        
+        while current_start <= end_date and iteration_count < max_iterations:
             # Вычисляем current_end так, чтобы каждый диапазон охватывал точно date_step дней
-            current_end = min(current_start + timedelta(days=self.date_step - 1), end_date)
+            current_end = min(current_start + timedelta(days=safe_date_step - 1), end_date)
             
             ranges.append({
                 "start": current_start.strftime("%Y-%m-%dT00:00:00"),
@@ -33,14 +81,31 @@ class DateManager:
             
             # Переходим к следующему окну
             current_start = current_end + timedelta(days=1)
+            iteration_count += 1
+        
+        # Предупреждение, если достигнут лимит итераций
+        if iteration_count >= max_iterations:
+            print(f"Предупреждение: достигнут лимит итераций ({max_iterations}) в generate_date_ranges")
         
         return ranges
     
     def get_default_range(self, days_back=30):
         """Получить диапазон по умолчанию (последние N дней)"""
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=days_back)
-        return self.generate_date_ranges(start_date, end_date)
+        try:
+            # Валидируем days_back
+            if not isinstance(days_back, (int, float)) or days_back <= 0:
+                raise ValueError(f"days_back должен быть положительным числом, получено: {days_back}")
+            
+            days_back = int(days_back)
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days_back)
+            return self.generate_date_ranges(start_date, end_date)
+        except Exception as e:
+            print(f"Ошибка при создании диапазона по умолчанию: {e}")
+            # Fallback: возвращаем диапазон за последний день
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=1)
+            return self.generate_date_ranges(start_date, end_date)
     
     def parse_date_string(self, date_str):
         """Парсить дату из строки"""

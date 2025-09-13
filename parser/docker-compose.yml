@@ -12,7 +12,6 @@ services:
       - ./logs:/app/logs
       - ./config:/app/config
     environment:
-      - PYTHONPATH=/app/..
       - PYTHONUNBUFFERED=1
     restart: unless-stopped
     

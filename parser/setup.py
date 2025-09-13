@@ -3,13 +3,25 @@
 Setup script for the Arbitrage Parser project
 """
 
+import os
 from setuptools import setup, find_packages
 
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
+# Получаем директорию файла setup.py
+setup_dir = os.path.dirname(os.path.abspath(__file__))
 
-with open("requirements.txt", "r", encoding="utf-8") as fh:
-    requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+# Загружаем README.md с обработкой ошибок
+try:
+    with open(os.path.join(setup_dir, "README.md"), "r", encoding="utf-8") as fh:
+        long_description = fh.read()
+except FileNotFoundError:
+    long_description = ""
+
+# Загружаем requirements.txt с обработкой ошибок
+try:
+    with open(os.path.join(setup_dir, "requirements.txt"), "r", encoding="utf-8") as fh:
+        requirements = [line.strip() for line in fh if line.strip() and not line.lstrip().startswith("#")]
+except FileNotFoundError:
+    requirements = []
 
 setup(
     name="arbitrage-parser",
@@ -19,6 +31,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(),
+    py_modules=["main"],  # main.py как top-level модуль
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Legal Industry",
@@ -39,6 +52,6 @@ setup(
     },
     include_package_data=True,
     package_data={
-        "": ["*.md", "*.txt", "*.yml", "*.yaml"],
+        "src": ["*.md", "*.txt", "*.yml", "*.yaml"],
     },
 )

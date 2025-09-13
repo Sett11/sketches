@@ -68,12 +68,13 @@ SEARCH_REQUEST_CONFIG = {
         "Courts": [],
         "DateFrom": "2021-01-01",
         "DateTo": "2021-12-31",
-        "CaseNumbers": [],
-        "Judges": [],
         "Sides": [],
-        "WithVKSInstances": False,
-        "CaseTypes": ["A", "G"]
-    }
+        "Judges": [],
+        "CaseNumbers": [],
+        "WithVKSInstances": False
+    },
+    "anti_bot_warning": True,  # Флаг для предупреждения о anti-bot защите
+    "requires_wasm_token": True  # Флаг указывающий на необходимость WASM токена
 }
 
 # Ключевые слова для фильтрации (исключаем ненужные типы документов)

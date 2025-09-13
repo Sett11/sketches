@@ -15,7 +15,7 @@ COPY . .
 RUN mkdir -p docs logs config
 
 # Устанавливаем переменные окружения
-ENV PYTHONPATH=/app/..
+ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
 # Открываем порт для Gradio

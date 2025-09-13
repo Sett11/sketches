@@ -22,6 +22,7 @@ class RateLimiter:
         self.requests_made = 0
         self.daily_reset_time = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         self._lock = threading.Lock()  # Блокировка для потокобезопасности
+        self._next_allowed_monotonic = 0.0  # Следующий разрешенный момент времени
         
     def can_make_request(self):
         """Проверить можно ли сделать запрос"""
@@ -33,13 +34,19 @@ class RateLimiter:
         """Зарегистрировать запрос"""
         # Проверяем лимит и регистрируем запрос атомарно
         with self._lock:
+            now = time.monotonic()
             self._check_daily_reset()
             if self.requests_made >= self.max_requests:
                 raise DailyLimitExceeded(f"Дневной лимит запросов ({self.max_requests}) превышен")
             self.requests_made += 1
+            
+            # Вычисляем время ожидания для глобального ограничения скорости
+            wait = max(0.0, self._next_allowed_monotonic - now)
+            # Обновляем следующий разрешенный момент времени
+            self._next_allowed_monotonic = max(self._next_allowed_monotonic, now) + self.delay
         
-        # Задержка между запросами выполняется вне блокировки
-        time.sleep(self.delay)
+        # Задержка выполняется вне блокировки для обеспечения глобального интервала
+        time.sleep(wait)
         
     def _check_daily_reset(self):
         """Проверить нужно ли сбросить счетчик на новый день"""
