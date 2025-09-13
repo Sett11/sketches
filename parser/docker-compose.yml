@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  arbitr-parser:
+    build: .
+    container_name: arbitr-parser
+    ports:
+      - "7860:7860"
+    volumes:
+      # Монтируем папки для сохранения данных
+      - ./docs:/app/docs
+      - ./logs:/app/logs
+      - ./config:/app/config
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    
+    # Ограничения ресурсов (опционально)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+# Для разработки можно добавить volume для исходного кода
+# volumes:
+#   source_code:
+#     driver: local

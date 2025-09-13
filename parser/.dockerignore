@@ -1,0 +1,37 @@
+# Исключаем ненужные файлы из Docker образа
+
+# Python кэш
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Логи
+logs/
+*.log
+
+# Документы (будут монтироваться как volume)
+docs/
+*.pdf
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Временные файлы
+*.tmp
+*.temp
+
+# Тестовые файлы
+test_*
+*_test.py
