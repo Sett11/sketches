@@ -125,7 +125,7 @@ def build_default_search_params(tz=None, page_size=None):
         "DateTo": date_to,
         "Sides": [],
         "Judges": [],
-        "Cases": [],
+        "CaseNumbers": [],
         "Text": ""
     }
 

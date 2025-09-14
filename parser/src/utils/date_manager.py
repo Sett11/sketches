@@ -4,9 +4,13 @@
 from datetime import datetime, timedelta
 import sys
 import os
+import logging
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from config.settings import PARSING_SETTINGS
+
+# Модульный логгер
+logger = logging.getLogger(__name__)
 
 class DateManager:
     """Простой менеджер диапазонов дат"""
@@ -25,17 +29,31 @@ class DateManager:
             int: Валидированное значение >= 1
             
         Raises:
-            ValueError: Если значение не может быть приведено к допустимому
+            ValueError: Если значение не может быть приведено к допустимому или не является целым числом
         """
         try:
-            # Приводим к int, если возможно
+            # Обрабатываем строки
             if isinstance(date_step, str):
-                date_step = int(float(date_step))  # Сначала float, потом int для обработки "2.0"
+                # Пытаемся преобразовать в float для проверки
+                float_val = float(date_step)
+                if not float_val.is_integer():
+                    raise ValueError(f"date_step должен быть целым числом, получено нецелое десятичное: {date_step}")
+                date_step = int(float_val)
+            # Обрабатываем float
             elif isinstance(date_step, float):
+                if not date_step.is_integer():
+                    raise ValueError(f"date_step должен быть целым числом, получено нецелое десятичное: {date_step}")
                 date_step = int(date_step)
+            # Обрабатываем другие типы
             elif not isinstance(date_step, int):
-                date_step = int(date_step)
+                # Пытаемся преобразовать в float для проверки
+                float_val = float(date_step)
+                if not float_val.is_integer():
+                    raise ValueError(f"date_step должен быть целым числом, получено нецелое десятичное: {date_step}")
+                date_step = int(float_val)
         except (ValueError, TypeError) as e:
+            if "нецелое десятичное" in str(e):
+                raise  # Перебрасываем наши кастомные ошибки
             raise ValueError(f"date_step должен быть числом, получено: {date_step} ({type(date_step).__name__})") from e
         
         # Проверяем, что значение положительное
@@ -91,21 +109,22 @@ class DateManager:
     
     def get_default_range(self, days_back=30):
         """Получить диапазон по умолчанию (последние N дней)"""
+        # Валидируем days_back в узком try/except
         try:
-            # Валидируем days_back
             if not isinstance(days_back, (int, float)) or days_back <= 0:
                 raise ValueError(f"days_back должен быть положительным числом, получено: {days_back}")
-            
             days_back = int(days_back)
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days_back)
-            return self.generate_date_ranges(start_date, end_date)
         except Exception as e:
-            print(f"Ошибка при создании диапазона по умолчанию: {e}")
+            logger.error(f"Ошибка валидации days_back: {e}")
             # Fallback: возвращаем диапазон за последний день
             end_date = datetime.now()
             start_date = end_date - timedelta(days=1)
             return self.generate_date_ranges(start_date, end_date)
+        
+        # Выполняем основную логику без try/except, позволяя исключениям распространяться
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days_back)
+        return self.generate_date_ranges(start_date, end_date)
     
     def parse_date_string(self, date_str):
         """Парсить дату из строки"""

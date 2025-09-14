@@ -68,3 +68,6 @@ class RateLimiter:
 
 # Глобальный rate limiter
 rate_limiter = RateLimiter()
+
+# Экспортируем исключение для использования в других модулях
+__all__ = ['RateLimiter', 'DailyLimitExceeded', 'rate_limiter']

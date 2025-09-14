@@ -21,21 +21,24 @@ def _normalize_keywords(keywords, default_keywords):
         default_keywords: Ключевые слова по умолчанию
         
     Returns:
-        list: Нормализованный список непустых ключевых слов
+        list: Нормализованный список непустых строк
     """
+    # Если keywords is None, используем default_keywords
     if keywords is None:
-        return default_keywords
+        keywords = default_keywords or []
     
     # Конвертируем строку в список
     if isinstance(keywords, str):
         keywords = [keywords]
     
-    # Убираем пробелы и пустые строки
-    normalized = [kw.strip() for kw in keywords if kw and kw.strip()]
-    
-    # Если результат пустой, используем значения по умолчанию
-    if not normalized:
-        return default_keywords
+    # Обрабатываем каждый элемент: конвертируем в строку, убираем пробелы, фильтруем пустые
+    normalized = []
+    for kw in keywords:
+        if kw is not None:
+            # Конвертируем в строку и убираем пробелы
+            kw_str = str(kw).strip()
+            if kw_str:  # Добавляем только непустые строки
+                normalized.append(kw_str)
     
     return normalized
 
@@ -78,13 +81,25 @@ class DocumentFilter:
         patterns = []
         
         for keyword in keywords:
+            # Проверяем что keyword является строкой и не пустой
+            if not isinstance(keyword, str):
+                logger.warning(f"Пропущен {pattern_type} паттерн '{keyword}': не является строкой.")
+                continue
+                
+            # Убираем пробелы и проверяем что строка не пустая
+            keyword = keyword.strip()
+            if not keyword:
+                logger.warning(f"Пропущен {pattern_type} паттерн: пустая строка или только пробелы.")
+                continue
+            
             try:
                 if is_regex:
                     # Компилируем как regex
                     pattern = re.compile(keyword, re.IGNORECASE)
                 else:
-                    # Экранируем специальные символы
-                    pattern = re.compile(re.escape(keyword), re.IGNORECASE)
+                    # Экранируем специальные символы и добавляем границы слов для точного совпадения
+                    escaped_keyword = re.escape(keyword)
+                    pattern = re.compile(rf'\b{escaped_keyword}\b', re.IGNORECASE)
                 
                 patterns.append(pattern)
                 

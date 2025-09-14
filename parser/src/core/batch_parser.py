@@ -7,10 +7,10 @@ import re
 import requests
 from datetime import datetime
 
-from ..utils.logger import logger
-from ..utils.cookie_manager import cookie_manager
-from ..utils.rate_limiter import rate_limiter, DailyLimitExceeded
-from ..utils.document_filter import document_filter
+from src.utils.logger import logger
+from src.utils.cookie_manager import cookie_manager
+from src.utils.rate_limiter import rate_limiter, DailyLimitExceeded
+from src.utils.document_filter import document_filter
 from config.settings import URLS, PARSING_SETTINGS, USER_AGENT, DOCS_DIR, ensure_dirs, build_default_search_params, SEARCH_REQUEST_CONFIG
 
 class BatchParser:
@@ -82,12 +82,36 @@ class BatchParser:
                 URLS["search_endpoint"],
                 json=test_data,
                 headers=headers,
-                timeout=10
+                timeout=PARSING_SETTINGS["timeout_seconds"],
+                allow_redirects=False
             )
             
+            # Обрабатываем редиректы как блокировку
+            if 300 <= response.status_code < 400:
+                logger.error(f"❌ Anti-bot защита активна - получен редирект {response.status_code}")
+                logger.error("❌ Необходимо обновить WASM токен или использовать прокси")
+                return False
+            
             if response.status_code == 200:
-                logger.info("✅ Anti-bot защита обойдена успешно")
-                return True
+                # Проверяем Content-Type для JSON ответов
+                content_type = response.headers.get('Content-Type', '').lower()
+                if not content_type.startswith('application/json'):
+                    logger.error(f"❌ Anti-bot защита активна - получен не-JSON ответ")
+                    logger.error(f"❌ Content-Type: {content_type}")
+                    logger.error("❌ Необходимо обновить WASM токен или использовать прокси")
+                    return False
+                
+                # Пытаемся парсить JSON
+                try:
+                    response.json()
+                    logger.info("✅ Anti-bot защита обойдена успешно")
+                    return True
+                except ValueError as e:
+                    logger.error(f"❌ Anti-bot защита активна - невалидный JSON ответ")
+                    logger.error(f"❌ Ошибка парсинга JSON: {e}")
+                    logger.error("❌ Необходимо обновить WASM токен или использовать прокси")
+                    return False
+                    
             elif response.status_code == 403:
                 logger.error("❌ Anti-bot защита активна - запрос заблокирован")
                 logger.error("❌ Необходимо обновить WASM токен или использовать прокси")
@@ -288,10 +312,10 @@ class BatchParser:
         """Проверить готовность эндпоинта к использованию"""
         logger.info("🔍 Проверка готовности эндпоинта...")
         
-        # Проверяем конфигурацию
+        # Если anti-bot защита не требуется, эндпоинт готов
         if not SEARCH_REQUEST_CONFIG.get("anti_bot_warning", False):
-            logger.warning("⚠️ Anti-bot защита не настроена в конфигурации")
-            return False
+            logger.info("ℹ️ Anti-bot защита не требуется - эндпоинт готов к использованию")
+            return True
         
         # Проверяем наличие обязательных cookies
         missing_cookies = []

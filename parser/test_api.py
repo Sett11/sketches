@@ -5,7 +5,32 @@ import os
 import requests
 import json
 import pytest
+import copy
 from config.settings import SEARCH_REQUEST_CONFIG, URLS
+
+# Заголовки, содержащие чувствительную информацию
+SENSITIVE_HEADERS = {
+    'authorization', 'cookie', 'set-cookie', 'x-api-key', 'x-auth-token',
+    'x-access-token', 'x-csrf-token', 'x-session-token', 'bearer'
+}
+
+def redact_header(name, value):
+    """
+    Скрывает чувствительные заголовки и обрезает длинные значения
+    """
+    name_lower = name.lower()
+    
+    # Проверяем, содержит ли имя заголовка чувствительные ключевые слова
+    is_sensitive = any(sensitive in name_lower for sensitive in SENSITIVE_HEADERS)
+    
+    if is_sensitive:
+        return "***redacted***"
+    
+    # Обрезаем длинные значения до ~80 символов
+    if isinstance(value, str) and len(value) > 80:
+        return value[:77] + "..."
+    
+    return value
 
 @pytest.mark.skipif(
     os.getenv("KAD_SMOKE") != "1",
@@ -21,10 +46,10 @@ def test_kad_arbitr_api():
     print(f"\n🔍 Тестируем основной endpoint: {endpoint}")
     
     # Используем заголовки из конфигурации
-    headers = SEARCH_REQUEST_CONFIG["headers"].copy()
+    headers = copy.deepcopy(SEARCH_REQUEST_CONFIG["headers"])
     
     # Используем правильную схему данных из конфигурации
-    test_data = SEARCH_REQUEST_CONFIG["json_template"].copy()
+    test_data = copy.deepcopy(SEARCH_REQUEST_CONFIG["json_template"])
     test_data.update({
         "Count": 5,
         "Page": 1,
@@ -34,7 +59,7 @@ def test_kad_arbitr_api():
     
     print(f"📋 Заголовки запроса:")
     for key, value in headers.items():
-        print(f"   {key}: {value}")
+        print(f"   {key}: {redact_header(key, value)}")
     
     print(f"📋 Данные запроса:")
     for key, value in test_data.items():
@@ -44,7 +69,9 @@ def test_kad_arbitr_api():
         response = requests.post(endpoint, json=test_data, headers=headers, timeout=10)
         print(f"\n📊 Результат запроса:")
         print(f"   Статус: {response.status_code}")
-        print(f"   Заголовки ответа: {dict(response.headers)}")
+        print(f"   Заголовки ответа:")
+        for key, value in response.headers.items():
+            print(f"      {key}: {redact_header(key, value)}")
         
         if response.status_code == 200:
             try:
@@ -53,27 +80,29 @@ def test_kad_arbitr_api():
                 print(f"   Ключи в ответе: {list(data.keys())}")
                 
                 # Ищем список документов
+                documents_found = False
                 for key in ['items', 'documents', 'results', 'data']:
                     if key in data and isinstance(data[key], list):
                         print(f"   📄 Найдены документы в поле '{key}': {len(data[key])} шт.")
                         if data[key]:
                             print(f"   Пример документа: {list(data[key][0].keys())}")
+                        documents_found = True
                         break
-                else:
-                    print(f"   ⚠️ Список документов не найден")
+                
+                # Assert что список документов найден
+                assert documents_found, "Список документов не найден в ответе"
                     
-            except json.JSONDecodeError:
-                print(f"   ❌ Не JSON ответ: {response.text[:200]}")
+            except json.JSONDecodeError as e:
+                pytest.fail(f"Не JSON ответ: {response.text[:200]}")
         elif response.status_code == 403:
-            print(f"   ❌ Доступ запрещен (403) - anti-bot защита активна")
-            print(f"   ❌ Необходим WASM токен или валидные cookies")
+            pytest.xfail("Доступ запрещен (403) - anti-bot защита активна")
         elif response.status_code == 429:
-            print(f"   ⚠️ Слишком много запросов (429) - rate limiting")
+            pytest.xfail("Слишком много запросов (429) - rate limiting")
         else:
-            print(f"   ❌ Ошибка: {response.text[:200]}")
+            pytest.fail(f"Неожиданный статус код {response.status_code}: {response.text[:200]}")
             
     except Exception as e:
-        print(f"   ❌ Исключение: {e}")
+        pytest.fail(f"Исключение: {e}")
     
     # Проверяем anti-bot защиту
     print(f"\n🛡️ Проверка anti-bot защиты:")
@@ -81,9 +110,9 @@ def test_kad_arbitr_api():
         print(f"   ⚠️ Эндпоинт требует WASM токен")
         print(f"   ⚠️ Обязательные cookies: {SEARCH_REQUEST_CONFIG.get('required_cookies', [])}")
         print(f"   💡 Рекомендации:")
-        print(f"      - Получите cookies из реального браузера")
-        print(f"      - Используйте прокси с обходом anti-bot")
-        print(f"      - Реализуйте генерацию WASM токена")
+        print(f"      - Соблюдайте условия использования сайта")
+        print(f"      - Используйте официальные API или документированные методы доступа")
+        print(f"      - Обратитесь к владельцу сайта за разрешением или поддержкой")
     
     print("\n" + "=" * 50)
     print("💡 Рекомендации:")
@@ -92,6 +121,10 @@ def test_kad_arbitr_api():
     print("3. Рассмотрите использование прокси для обхода anti-bot")
     print("4. Тестируйте с реальными браузерными cookies")
 
+@pytest.mark.skipif(
+    os.getenv("KAD_SMOKE") != "1",
+    reason="Тест требует KAD_SMOKE=1 для запуска (пропускается по умолчанию для избежания нестабильности CI)"
+)
 def test_endpoint_with_proper_headers():
     """Тест эндпоинта с правильными заголовками и схемой"""
     print("🧪 Тестирование эндпоинта с правильной конфигурацией")
@@ -102,7 +135,7 @@ def test_endpoint_with_proper_headers():
     session.headers.update(SEARCH_REQUEST_CONFIG["headers"])
     
     # Подготавливаем данные запроса
-    test_data = SEARCH_REQUEST_CONFIG["json_template"].copy()
+    test_data = copy.deepcopy(SEARCH_REQUEST_CONFIG["json_template"])
     test_data.update({
         "Count": 3,
         "Page": 1,
@@ -139,8 +172,8 @@ def test_endpoint_with_proper_headers():
         
         print(f"\n📊 Результат:")
         print(f"   Статус: {response.status_code}")
-        print(f"   Content-Type: {response.headers.get('Content-Type', 'N/A')}")
-        print(f"   Content-Length: {response.headers.get('Content-Length', 'N/A')}")
+        print(f"   Content-Type: {redact_header('Content-Type', response.headers.get('Content-Type', 'N/A'))}")
+        print(f"   Content-Length: {redact_header('Content-Length', response.headers.get('Content-Length', 'N/A'))}")
         
         if response.status_code == 200:
             try:
@@ -149,37 +182,34 @@ def test_endpoint_with_proper_headers():
                 print(f"   📄 Ключи ответа: {list(data.keys())}")
                 
                 # Анализируем структуру ответа
+                documents_found = False
                 for key in ['items', 'documents', 'results', 'data']:
                     if key in data and isinstance(data[key], list):
                         print(f"   📄 Документы в '{key}': {len(data[key])} шт.")
                         if data[key]:
                             print(f"   📄 Пример полей документа: {list(data[key][0].keys())}")
+                        documents_found = True
                         break
-                else:
-                    print(f"   ⚠️ Структура ответа не содержит списка документов")
+                
+                # Assert что список документов найден
+                assert documents_found, "Структура ответа не содержит списка документов"
                     
             except json.JSONDecodeError as e:
-                print(f"   ❌ Ошибка парсинга JSON: {e}")
-                print(f"   📄 Первые 200 символов ответа: {response.text[:200]}")
+                pytest.fail(f"Ошибка парсинга JSON: {e}. Первые 200 символов ответа: {response.text[:200]}")
                 
         elif response.status_code == 403:
-            print(f"   ❌ Доступ запрещен (403) - anti-bot защита активна")
-            print(f"   💡 Решения:")
-            print(f"      - Получите cookies из браузера")
-            print(f"      - Используйте прокси с обходом")
-            print(f"      - Реализуйте генерацию WASM токена")
+            pytest.xfail("Доступ запрещен (403) - anti-bot защита активна")
         elif response.status_code == 429:
-            print(f"   ⚠️ Rate limiting (429) - слишком много запросов")
+            pytest.xfail("Rate limiting (429) - слишком много запросов")
         else:
-            print(f"   ❌ Неожиданный статус: {response.status_code}")
-            print(f"   📄 Ответ: {response.text[:200]}")
+            pytest.fail(f"Неожиданный статус: {response.status_code}. Ответ: {response.text[:200]}")
             
     except requests.exceptions.Timeout:
-        print(f"   ❌ Таймаут запроса")
+        pytest.fail("Таймаут запроса")
     except requests.exceptions.ConnectionError:
-        print(f"   ❌ Ошибка соединения")
+        pytest.fail("Ошибка соединения")
     except Exception as e:
-        print(f"   ❌ Неожиданная ошибка: {e}")
+        pytest.fail(f"Неожиданная ошибка: {e}")
     
     print("\n" + "=" * 60)
     print("💡 Заключение:")

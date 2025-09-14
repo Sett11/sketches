@@ -6,9 +6,9 @@ import json
 import os
 from datetime import datetime, timedelta
 
-from ..core.batch_parser import create_batch_parser
-from ..utils.cookie_manager import cookie_manager
-from ..utils.date_manager import date_manager
+from src.core.batch_parser import create_batch_parser
+from src.utils.cookie_manager import cookie_manager
+from src.utils.date_manager import date_manager
 from config.settings import DOCS_DIR, LOGS_DIR
 
 class GradioDashboard:
