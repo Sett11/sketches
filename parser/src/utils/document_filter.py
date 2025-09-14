@@ -2,10 +2,8 @@
 Простая фильтрация документов по ключевым словам
 """
 import re
-import sys
 import os
 import logging
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from config.settings import EXCLUDE_KEYWORDS, INCLUDE_KEYWORDS
 
@@ -97,9 +95,23 @@ class DocumentFilter:
                     # Компилируем как regex
                     pattern = re.compile(keyword, re.IGNORECASE)
                 else:
-                    # Экранируем специальные символы и добавляем границы слов для точного совпадения
+                    # Экранируем специальные символы и добавляем условные границы для точного совпадения
                     escaped_keyword = re.escape(keyword)
-                    pattern = re.compile(rf'\b{escaped_keyword}\b', re.IGNORECASE)
+                    
+                    # Проверяем первый и последний символы для определения типа границ
+                    if escaped_keyword and len(escaped_keyword) > 0:
+                        first_char = escaped_keyword[0]
+                        last_char = escaped_keyword[-1]
+                        
+                        # Если первый и последний символы являются буквенно-цифровыми, используем границы слов
+                        if re.match(r'\w', first_char) and re.match(r'\w', last_char):
+                            pattern = re.compile(rf'\b{escaped_keyword}\b', re.IGNORECASE)
+                        else:
+                            # Иначе используем lookarounds для проверки границ
+                            pattern = re.compile(rf'(?<!\w){escaped_keyword}(?!\w)', re.IGNORECASE)
+                    else:
+                        # Для пустых строк используем обычные границы слов (fallback)
+                        pattern = re.compile(rf'\b{escaped_keyword}\b', re.IGNORECASE)
                 
                 patterns.append(pattern)
                 

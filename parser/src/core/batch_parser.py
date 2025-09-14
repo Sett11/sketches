@@ -147,8 +147,15 @@ class BatchParser:
                 missing_cookies.append(cookie_name)
         
         if missing_cookies:
-            logger.warning(f"⚠️ Отсутствуют обязательные cookies: {missing_cookies}")
-            logger.warning("⚠️ Запрос может быть заблокирован anti-bot системой")
+            logger.error(f"❌ Отсутствуют обязательные cookies: {missing_cookies}")
+            logger.error("❌ БЕЗ ЭТИХ COOKIES ПАРСИНГ НЕВОЗМОЖЕН!")
+            logger.error("❌ Получите cookies из браузера согласно инструкции в дашборде")
+            return []
+        else:
+            logger.info(f"✅ Найдены обязательные cookies: {SEARCH_REQUEST_CONFIG.get('required_cookies', [])}")
+            logger.info(f"✅ Всего cookies в сессии: {len(self.session.cookies)}")
+            for cookie in self.session.cookies:
+                logger.info(f"   - {cookie.name}: {cookie.value[:20]}...")
         
         try:
             rate_limiter.make_request()
@@ -176,6 +183,14 @@ class BatchParser:
             elif response.status_code == 403:
                 logger.error("❌ Доступ запрещен (403) - возможно сработала anti-bot защита")
                 logger.error("❌ Требуется обновить WASM токен или cookies")
+                return []
+            elif response.status_code == 451:
+                logger.error("❌ ДОСТУП ЗАБЛОКИРОВАН (451) - Anti-bot защита активна!")
+                logger.error("❌ Получите свежие cookies из браузера:")
+                logger.error("   1. Откройте https://kad.arbitr.ru в браузере")
+                logger.error("   2. F12 → Application → Cookies")
+                logger.error("   3. Скопируйте pr_fp и wasm cookies")
+                logger.error("❌ Cookies работают ограниченное время!")
                 return []
             elif response.status_code == 429:
                 logger.warning("⚠️ Слишком много запросов (429) - rate limiting")

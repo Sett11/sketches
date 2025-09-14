@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   arbitr-parser:
     build: .
@@ -11,6 +9,10 @@ services:
       - ./docs:/app/docs
       - ./logs:/app/logs
       - ./config:/app/config
+      # Монтируем исходный код для автоматических изменений
+      - ./src:/app/src
+      - ./main.py:/app/main.py
+      - ./__init__.py:/app/__init__.py
     environment:
       - PYTHONUNBUFFERED=1
     restart: unless-stopped

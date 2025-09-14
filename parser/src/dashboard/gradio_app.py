@@ -4,12 +4,57 @@
 import gradio as gr
 import json
 import os
+import sys
 from datetime import datetime, timedelta
 
-from src.core.batch_parser import create_batch_parser
-from src.utils.cookie_manager import cookie_manager
-from src.utils.date_manager import date_manager
-from config.settings import DOCS_DIR, LOGS_DIR
+# Устойчивые импорты - работают как при запуске как пакета, так и как скрипта
+try:
+    from src.core.batch_parser import create_batch_parser
+except ImportError:
+    try:
+        from ..core.batch_parser import create_batch_parser
+    except ImportError:
+        # Добавляем корень проекта в sys.path для абсолютных импортов
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from src.core.batch_parser import create_batch_parser
+
+try:
+    from src.utils.cookie_manager import cookie_manager
+except ImportError:
+    try:
+        from ..utils.cookie_manager import cookie_manager
+    except ImportError:
+        # Добавляем корень проекта в sys.path для абсолютных импортов
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from src.utils.cookie_manager import cookie_manager
+
+try:
+    from src.utils.date_manager import date_manager
+except ImportError:
+    try:
+        from ..utils.date_manager import date_manager
+    except ImportError:
+        # Добавляем корень проекта в sys.path для абсолютных импортов
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from src.utils.date_manager import date_manager
+
+try:
+    from config.settings import DOCS_DIR, LOGS_DIR
+except ImportError:
+    try:
+        from ...config.settings import DOCS_DIR, LOGS_DIR
+    except ImportError:
+        # Добавляем корень проекта в sys.path для абсолютных импортов
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from config.settings import DOCS_DIR, LOGS_DIR
 
 class GradioDashboard:
     """Простой дашборд для управления парсером"""
@@ -186,6 +231,24 @@ class GradioDashboard:
             **Фильтры:**
             - ✅ Включаем: решения, кассации, постановления
             - ❌ Исключаем: переносы, отклонения, назначения времени
+            
+            ## 🍪 Как получить Cookies:
+            
+            1. Откройте https://kad.arbitr.ru в браузере
+            2. Откройте Developer Tools (F12)
+            3. Перейдите на вкладку Application/Storage → Cookies
+            4. Найдите **ОБЯЗАТЕЛЬНЫЙ** cookie: `pr_fp`
+            5. Скопируйте его в формате JSON:
+            ```json
+            {
+                "pr_fp": "значение_из_браузера"
+            }
+            ```
+            
+            **⚠️ Важно:** 
+            - Без `pr_fp` парсинг НЕ РАБОТАЕТ!
+            - Cookies работают ограниченное время, затем нужно обновлять!
+            - Другие cookies (`wasm`, `PHPSESSID` и т.д.) опциональны
             """)
         
         return interface
@@ -193,7 +256,7 @@ class GradioDashboard:
     def launch(self, share=False, port=7860):
         """Запустить дашборд"""
         interface = self.create_interface()
-        interface.launch(share=share, server_port=port)
+        interface.launch(share=share, server_port=port, server_name="0.0.0.0")
 
 # Создание и запуск дашборда
 if __name__ == "__main__":

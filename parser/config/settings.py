@@ -61,7 +61,7 @@ SEARCH_REQUEST_CONFIG = {
         "Referer": "https://kad.arbitr.ru/",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     },
-    "required_cookies": ["pr_fp", "wasm"],  # Обязательные cookies + сессионные cookies
+    "required_cookies": ["pr_fp"],  # Обязательные cookies (wasm может отсутствовать)
     "json_template": {
         "Page": 1,
         "Count": 25,
@@ -76,6 +76,9 @@ SEARCH_REQUEST_CONFIG = {
     "anti_bot_warning": True,  # Флаг для предупреждения о anti-bot защите
     "requires_wasm_token": True  # Флаг указывающий на необходимость WASM токена
 }
+
+# Добавляем обратно совместимый алиас для CaseNumbers
+SEARCH_REQUEST_CONFIG["json_template"]["Cases"] = SEARCH_REQUEST_CONFIG["json_template"]["CaseNumbers"]
 
 # Ключевые слова для фильтрации (исключаем ненужные типы документов)
 EXCLUDE_KEYWORDS = [
@@ -116,7 +119,7 @@ def build_default_search_params(tz=None, page_size=None):
     date_from = (now - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
     date_to = now.strftime("%Y-%m-%dT23:59:59")
     
-    return {
+    result = {
         "GroupByCase": False,
         "Count": count,
         "Page": 1,
@@ -128,6 +131,11 @@ def build_default_search_params(tz=None, page_size=None):
         "CaseNumbers": [],
         "Text": ""
     }
+    
+    # Добавляем обратно совместимый алиас для CaseNumbers
+    result["Cases"] = result["CaseNumbers"]
+    
+    return result
 
 # User Agent для запросов
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"

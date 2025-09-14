@@ -2,15 +2,16 @@
 Простое управление диапазонами дат
 """
 from datetime import datetime, timedelta
-import sys
-import os
 import logging
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from config.settings import PARSING_SETTINGS
 
 # Модульный логгер
 logger = logging.getLogger(__name__)
+
+class _IntegerishError(ValueError):
+    """Исключение для случаев, когда значение не является целым числом"""
+    pass
 
 class DateManager:
     """Простой менеджер диапазонов дат"""
@@ -31,29 +32,33 @@ class DateManager:
         Raises:
             ValueError: Если значение не может быть приведено к допустимому или не является целым числом
         """
+        # Явно отклоняем булевы значения
+        if isinstance(date_step, bool):
+            raise ValueError(f"date_step не может быть булевым значением, получено: {date_step}")
+        
         try:
             # Обрабатываем строки
             if isinstance(date_step, str):
                 # Пытаемся преобразовать в float для проверки
                 float_val = float(date_step)
                 if not float_val.is_integer():
-                    raise ValueError(f"date_step должен быть целым числом, получено нецелое десятичное: {date_step}")
+                    raise _IntegerishError(f"date_step должен быть целым числом, получено нецелое десятичное: {date_step}")
                 date_step = int(float_val)
             # Обрабатываем float
             elif isinstance(date_step, float):
                 if not date_step.is_integer():
-                    raise ValueError(f"date_step должен быть целым числом, получено нецелое десятичное: {date_step}")
+                    raise _IntegerishError(f"date_step должен быть целым числом, получено нецелое десятичное: {date_step}")
                 date_step = int(date_step)
             # Обрабатываем другие типы
             elif not isinstance(date_step, int):
                 # Пытаемся преобразовать в float для проверки
                 float_val = float(date_step)
                 if not float_val.is_integer():
-                    raise ValueError(f"date_step должен быть целым числом, получено нецелое десятичное: {date_step}")
+                    raise _IntegerishError(f"date_step должен быть целым числом, получено нецелое десятичное: {date_step}")
                 date_step = int(float_val)
+        except _IntegerishError:
+            raise  # Перебрасываем наши кастомные ошибки для нецелых чисел
         except (ValueError, TypeError) as e:
-            if "нецелое десятичное" in str(e):
-                raise  # Перебрасываем наши кастомные ошибки
             raise ValueError(f"date_step должен быть числом, получено: {date_step} ({type(date_step).__name__})") from e
         
         # Проверяем, что значение положительное
