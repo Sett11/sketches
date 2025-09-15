@@ -95,7 +95,7 @@ class PuppeteerBatchParser:
             logger.error(f"❌ Ошибка поиска документов: {e}")
             return []
     
-    def download_pdf(self, pdf_url: str, filename: str) -> bool:
+    async def download_pdf(self, pdf_url: str, filename: str) -> bool:
         """Скачать PDF через Puppeteer"""
         try:
             if not self.is_initialized:
@@ -203,9 +203,10 @@ class PuppeteerBatchParser:
     def __del__(self):
         """Деструктор - автоматическое закрытие браузера"""
         try:
-            self.close()
-        except:
-            pass
+            if hasattr(self, 'puppeteer') and self.puppeteer:
+                self.close()
+        except Exception:
+            pass  # Игнорируем ошибки в деструкторе
 
 
 def create_puppeteer_batch_parser() -> PuppeteerBatchParser:

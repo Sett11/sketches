@@ -18,6 +18,39 @@ class CookieExtractor {
     }
 
     /**
+     * Получение дат для API запроса с валидацией
+     */
+    getApiDates(dateFrom = null, dateTo = null) {
+        const today = new Date();
+        const defaultFrom = new Date(today.getFullYear(), 0, 1); // 1 января текущего года
+        const defaultTo = today;
+
+        // Валидация и форматирование дат
+        const formatDate = (date) => {
+            if (!date) return null;
+            
+            const d = new Date(date);
+            if (isNaN(d.getTime())) {
+                console.warn(`⚠️ Некорректная дата: ${date}, используется значение по умолчанию`);
+                return null;
+            }
+            
+            return d.toISOString().split('T')[0]; // YYYY-MM-DD формат
+        };
+
+        const fromDate = formatDate(dateFrom) || formatDate(defaultFrom);
+        const toDate = formatDate(dateTo) || formatDate(defaultTo);
+
+        // Дополнительная валидация: fromDate не должна быть позже toDate
+        if (fromDate && toDate && new Date(fromDate) > new Date(toDate)) {
+            console.warn('⚠️ DateFrom позже DateTo, меняем местами');
+            return { DateFrom: toDate, DateTo: fromDate };
+        }
+
+        return { DateFrom: fromDate, DateTo: toDate };
+    }
+
+    /**
      * Инициализация браузера
      */
     async init() {
@@ -111,7 +144,11 @@ class CookieExtractor {
                 await this.page.waitForTimeout(3000);
                 
             } catch (error) {
-                console.log('⚠️ Не удалось выполнить поиск, продолжаем...');
+                console.error('⚠️ Не удалось выполнить поиск, продолжаем...', {
+                    error: error.message,
+                    stack: error.stack,
+                    context: 'test_search_execution'
+                });
             }
 
             // Шаг 4: Собираем все cookies
@@ -148,8 +185,12 @@ class CookieExtractor {
             console.log('🔄 Активируем cookies через API запрос...');
             
             try {
+                // Получаем валидированные даты
+                const dates = this.getApiDates();
+                console.log(`📅 Используем даты: ${dates.DateFrom} - ${dates.DateTo}`);
+                
                 // Выполняем тестовый API запрос
-                const apiResponse = await this.page.evaluate(async () => {
+                const apiResponse = await this.page.evaluate(async (requestDates) => {
                     try {
                         const response = await fetch('https://kad.arbitr.ru/Kad/SearchInstances', {
                             method: 'POST',
@@ -165,8 +206,8 @@ class CookieExtractor {
                                 Page: 1,
                                 Count: 1,
                                 Courts: [],
-                                DateFrom: '2024-01-01',
-                                DateTo: '2024-01-01',
+                                DateFrom: requestDates.DateFrom,
+                                DateTo: requestDates.DateTo,
                                 Sides: [],
                                 Judges: [],
                                 CaseNumbers: [],
@@ -191,7 +232,7 @@ class CookieExtractor {
                             error: error.message
                         };
                     }
-                });
+                }, dates);
 
                 if (apiResponse.success) {
                     console.log('✅ API запрос успешен - cookies активны');
@@ -267,10 +308,11 @@ class CookieExtractor {
 
         for (const [cookieName, description] of Object.entries(criticalCookies)) {
             if (this.extracted_cookies[cookieName]) {
+                const cookieValue = this.extracted_cookies[cookieName] || '';
                 validation.criticalCookies[cookieName] = {
                     found: true,
                     description: description,
-                    value: this.extracted_cookies[cookieName].substring(0, 20) + '...'
+                    value: String(cookieValue).substring(0, 20) + '...'
                 };
             } else {
                 if (cookieName === 'pr_fp') {

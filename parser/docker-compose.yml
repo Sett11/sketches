@@ -16,6 +16,10 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - GRADIO_SERVER_NAME=0.0.0.0
+      - DOCS_DIR=/app/docs
+      - LOGS_DIR=/app/logs
+      - PUPPETEER_HEADLESS=true
+      - PUPPETEER_TIMEOUT=30000
     restart: unless-stopped
     
     # Ограничения ресурсов (опционально)

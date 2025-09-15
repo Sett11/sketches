@@ -8,3 +8,5 @@ __pycache__/
 # Cookie files with secrets
 parser/cookies.json
 parser/config/cookies.json
+
+node_modules/

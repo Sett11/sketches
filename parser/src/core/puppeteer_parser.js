@@ -10,10 +10,18 @@ const path = require('path');
 puppeteer.use(StealthPlugin());
 
 class PuppeteerParser {
-    constructor() {
+    constructor(options = {}) {
         this.browser = null;
         this.page = null;
         this.cookies = null;
+        
+        // Настраиваемый путь к директории docs
+        // Приоритет: options.docsDir -> process.env.DOCS_DIR -> fallback
+        this.docsDir = options.docsDir || 
+                      process.env.DOCS_DIR || 
+                      path.join(process.cwd(), 'docs');
+        
+        console.log(`📁 Директория для документов: ${this.docsDir}`);
     }
 
     /**
@@ -158,12 +166,11 @@ class PuppeteerParser {
             const pdfBuffer = await response.buffer();
             
             // Сохраняем файл
-            const docsDir = path.join('/app', 'docs');
-            if (!fs.existsSync(docsDir)) {
-                fs.mkdirSync(docsDir, { recursive: true });
+            if (!fs.existsSync(this.docsDir)) {
+                fs.mkdirSync(this.docsDir, { recursive: true });
             }
 
-            const filepath = path.join(docsDir, filename);
+            const filepath = path.join(this.docsDir, filename);
             fs.writeFileSync(filepath, pdfBuffer);
             
             console.log(`✅ PDF сохранен: ${filepath}`);
@@ -180,10 +187,9 @@ class PuppeteerParser {
      */
     async processDateRange(startDate, endDate, maxPages = 40) {
         const results = [];
-        const docsDir = path.join('/app', 'docs');
         
-        if (!fs.existsSync(docsDir)) {
-            fs.mkdirSync(docsDir, { recursive: true });
+        if (!fs.existsSync(this.docsDir)) {
+            fs.mkdirSync(this.docsDir, { recursive: true });
         }
 
         let currentDate = new Date(startDate);
@@ -277,7 +283,7 @@ class PuppeteerParser {
         }
 
         // Сохраняем метаданные
-        const metadataPath = path.join(docsDir, 'metadata.json');
+        const metadataPath = path.join(this.docsDir, 'metadata.json');
         fs.writeFileSync(metadataPath, JSON.stringify({
             processed_at: new Date().toISOString(),
             total_documents: results.length,
@@ -293,8 +299,7 @@ class PuppeteerParser {
      */
     getStats() {
         try {
-            const docsDir = path.join('/app', 'docs');
-            const metadataPath = path.join(docsDir, 'metadata.json');
+            const metadataPath = path.join(this.docsDir, 'metadata.json');
             
             if (!fs.existsSync(metadataPath)) {
                 return { total_documents: 0, last_update: null };

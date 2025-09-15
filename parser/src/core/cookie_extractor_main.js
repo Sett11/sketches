@@ -27,18 +27,25 @@ async function main() {
         const cookies_file = '/app/docs/auto_extracted_cookies.json';
         await extractor.saveCookies(cookies_file);
         
-        // Выводим результат
+        // Выводим результат с защитой от null/undefined validation
+        const safeValidation = validation || {
+            isValid: false,
+            errors: [],
+            warnings: [],
+            criticalCookies: {}
+        };
+        
         const result = {
             success: true,
             cookies: cookies,
-            validation: validation,
+            validation: safeValidation,
             message: 'Cookies успешно собраны автоматически',
             stats: {
-                total_cookies: Object.keys(cookies).length,
-                critical_cookies: Object.keys(validation.criticalCookies).length,
-                isValid: validation.isValid,
-                errors: validation.errors.length,
-                warnings: validation.warnings.length
+                total_cookies: Object.keys(cookies || {}).length,
+                critical_cookies: Object.keys(safeValidation.criticalCookies || {}).length,
+                isValid: safeValidation.isValid || false,
+                errors: (safeValidation.errors || []).length,
+                warnings: (safeValidation.warnings || []).length
             }
         };
         

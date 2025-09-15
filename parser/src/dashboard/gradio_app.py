@@ -260,7 +260,7 @@ class GradioDashboard:
                 return f"""✅ Cookies автоматически собраны!
 
 🍪 Статистика:
-• Всего cookies: {result['validation']['foundCookies'].__len__()}
+• Всего cookies: {result['validation']['foundCookies']}
 • Критически важных: {len(result['validation']['criticalCookies'])}
 • Статус: {'✅ Валидны' if result['validation']['isValid'] else '⚠️ Требуют проверки'}
 

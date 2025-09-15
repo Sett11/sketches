@@ -20,21 +20,36 @@ class PuppeteerWrapper:
     def __init__(self):
         self.script_path = os.path.join(os.path.dirname(__file__), 'puppeteer_main.js')
         self.cookies_temp_file = None
+        self._temp_files = []  # Список для отслеживания всех временных файлов
         
     def _create_temp_cookies_file(self, cookies_dict: Dict) -> str:
         """Создает временный файл с cookies"""
         temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
         json.dump(cookies_dict, temp_file, ensure_ascii=False, indent=2)
         temp_file.close()
+        
+        # Добавляем файл в список отслеживания
+        self._temp_files.append(temp_file.name)
+        logger.debug(f"Создан временный файл cookies: {temp_file.name}")
+        
         return temp_file.name
     
     def _cleanup_temp_files(self):
-        """Удаляет временные файлы"""
-        if self.cookies_temp_file and os.path.exists(self.cookies_temp_file):
-            try:
-                os.unlink(self.cookies_temp_file)
-            except Exception as e:
-                logger.warning(f"Не удалось удалить временный файл cookies: {e}")
+        """Удаляет все временные файлы"""
+        # Очищаем все отслеживаемые временные файлы
+        for temp_file_path in self._temp_files:
+            if os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                    logger.debug(f"Удален временный файл: {temp_file_path}")
+                except Exception as e:
+                    logger.warning(f"Не удалось удалить временный файл {temp_file_path}: {e}")
+        
+        # Очищаем список отслеживания
+        self._temp_files.clear()
+        
+        # Очищаем старую ссылку на cookies файл для обратной совместимости
+        self.cookies_temp_file = None
     
     def init_browser(self) -> bool:
         """Инициализация браузера"""
@@ -76,8 +91,6 @@ class PuppeteerWrapper:
         except Exception as e:
             logger.error(f"❌ Ошибка загрузки cookies: {e}")
             return False
-        finally:
-            self._cleanup_temp_files()
     
     def search_documents(self, search_params: Dict) -> Optional[Dict]:
         """Поиск документов"""
@@ -164,6 +177,11 @@ class PuppeteerWrapper:
                     temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
                     json.dump(value, temp_file, ensure_ascii=False, indent=2)
                     temp_file.close()
+                    
+                    # Добавляем файл в список отслеживания
+                    self._temp_files.append(temp_file.name)
+                    logger.debug(f"Создан временный файл для аргумента {key}: {temp_file.name}")
+                    
                     args.extend([f'--{key}', temp_file.name])
                 else:
                     args.extend([f'--{key}', str(value)])
@@ -197,3 +215,17 @@ class PuppeteerWrapper:
         except Exception as e:
             logger.error(f"❌ Ошибка выполнения JavaScript команды: {e}")
             return {'success': False, 'error': str(e)}
+    
+    def __enter__(self):
+        """Контекстный менеджер - вход"""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Контекстный менеджер - выход с автоматической очисткой"""
+        try:
+            self.close_browser()
+        except Exception as e:
+            logger.warning(f"⚠️ Ошибка при закрытии браузера в контекстном менеджере: {e}")
+        finally:
+            # Гарантируем очистку временных файлов даже при ошибках
+            self._cleanup_temp_files()

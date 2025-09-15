@@ -9,22 +9,49 @@ const PuppeteerParser = require('./puppeteer_parser.js');
 function parseArgs() {
     const args = process.argv.slice(2);
     const parsed = {};
+    const fs = require('fs');
     
-    for (let i = 0; i < args.length; i += 2) {
-        if (args[i].startsWith('--')) {
-            const key = args[i].substring(2);
-            const value = args[i + 1];
+    let i = 0;
+    
+    // Обрабатываем первый аргумент как команду, если он не начинается с '--'
+    if (args.length > 0 && !args[0].startsWith('--')) {
+        parsed.command = args[0];
+        parsed._ = args[0];
+        i = 1;
+    }
+    
+    // Обрабатываем остальные аргументы
+    while (i < args.length) {
+        const arg = args[i];
+        
+        if (arg.startsWith('--')) {
+            const key = arg.substring(2);
+            const nextArg = args[i + 1];
             
-            // Если значение - путь к JSON файлу, читаем его
-            if (value && value.endsWith('.json') && require('fs').existsSync(value)) {
-                try {
-                    parsed[key] = JSON.parse(require('fs').readFileSync(value, 'utf8'));
-                } catch (e) {
+            // Проверяем, есть ли следующий аргумент и не является ли он флагом
+            if (nextArg && !nextArg.startsWith('--')) {
+                // Следующий аргумент - значение
+                const value = nextArg;
+                
+                // Если значение - путь к JSON файлу, читаем его
+                if (value.endsWith('.json') && fs.existsSync(value)) {
+                    try {
+                        parsed[key] = JSON.parse(fs.readFileSync(value, 'utf8'));
+                    } catch (e) {
+                        parsed[key] = value;
+                    }
+                } else {
                     parsed[key] = value;
                 }
+                i += 2; // Пропускаем и ключ, и значение
             } else {
-                parsed[key] = value;
+                // Следующего аргумента нет или он тоже флаг - это булевый флаг
+                parsed[key] = true;
+                i += 1; // Пропускаем только ключ
             }
+        } else {
+            // Аргумент без '--' - пропускаем (возможно, позиционный аргумент)
+            i += 1;
         }
     }
     
@@ -34,7 +61,7 @@ function parseArgs() {
 // Главная функция
 async function main() {
     const args = parseArgs();
-    const command = args._ || args[0] || 'help';
+    const command = args.command || args._ || 'help';
     
     let parser = null;
     
