@@ -1,5 +1,10 @@
 env
 .env
 *.log
-*.pyc*
+*.py[cod]
+*.pyo
 __pycache__/
+
+# Cookie files with secrets
+parser/cookies.json
+parser/config/cookies.json

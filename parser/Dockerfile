@@ -4,10 +4,9 @@ FROM python:3.11-slim
 # Создаем рабочую директорию
 WORKDIR /app
 
-# Обновляем pip и устанавливаем зависимости
-RUN pip install --upgrade pip
+# Копируем requirements.txt и устанавливаем зависимости
 COPY requirements.txt .
-RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
+RUN python -m pip install --upgrade pip && python -m pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
 
 # Копируем исходный код
 COPY . .

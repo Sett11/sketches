@@ -15,6 +15,7 @@ services:
       - ./__init__.py:/app/__init__.py
     environment:
       - PYTHONUNBUFFERED=1
+      - GRADIO_SERVER_NAME=0.0.0.0
     restart: unless-stopped
     
     # Ограничения ресурсов (опционально)

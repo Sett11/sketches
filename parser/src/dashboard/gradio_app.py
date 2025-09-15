@@ -2,59 +2,85 @@
 Простой Gradio дашборд для управления парсером
 """
 import gradio as gr
+import importlib
 import json
 import os
 import sys
 from datetime import datetime, timedelta
 
+def safe_import(module_paths, item_name=None):
+    """
+    Устойчивый импорт модулей с fallback логикой
+    
+    Args:
+        module_paths: список путей для импорта в порядке приоритета
+        item_name: имя элемента для импорта из модуля (если None, импортируется весь модуль)
+    
+    Returns:
+        Импортированный модуль или элемент
+    """
+    for module_path in module_paths:
+        try:
+            module = importlib.import_module(module_path)
+            return getattr(module, item_name) if item_name else module
+        except ImportError:
+            continue
+    
+    # Если все попытки не удались, добавляем корень проекта в sys.path
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    
+    # Пробуем импортировать с абсолютным путем
+    try:
+        module = importlib.import_module(module_paths[-1])  # Берем последний путь как абсолютный
+        return getattr(module, item_name) if item_name else module
+    except ImportError:
+        raise ImportError(f"Не удалось импортировать {module_paths[-1]} даже после добавления {project_root} в sys.path")
+
 # Устойчивые импорты - работают как при запуске как пакета, так и как скрипта
-try:
-    from src.core.batch_parser import create_batch_parser
-except ImportError:
-    try:
-        from ..core.batch_parser import create_batch_parser
-    except ImportError:
-        # Добавляем корень проекта в sys.path для абсолютных импортов
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.core.batch_parser import create_batch_parser
+create_batch_parser = safe_import(
+    ["src.core.batch_parser", "..core.batch_parser"],
+    "create_batch_parser"
+)
 
-try:
-    from src.utils.cookie_manager import cookie_manager
-except ImportError:
-    try:
-        from ..utils.cookie_manager import cookie_manager
-    except ImportError:
-        # Добавляем корень проекта в sys.path для абсолютных импортов
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.utils.cookie_manager import cookie_manager
+cookie_manager = safe_import(
+    ["src.utils.cookie_manager", "..utils.cookie_manager"],
+    "cookie_manager"
+)
 
-try:
-    from src.utils.date_manager import date_manager
-except ImportError:
-    try:
-        from ..utils.date_manager import date_manager
-    except ImportError:
-        # Добавляем корень проекта в sys.path для абсолютных импортов
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.utils.date_manager import date_manager
+date_manager = safe_import(
+    ["src.utils.date_manager", "..utils.date_manager"],
+    "date_manager"
+)
 
-try:
-    from config.settings import DOCS_DIR, LOGS_DIR
-except ImportError:
-    try:
-        from ...config.settings import DOCS_DIR, LOGS_DIR
-    except ImportError:
-        # Добавляем корень проекта в sys.path для абсолютных импортов
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from config.settings import DOCS_DIR, LOGS_DIR
+settings_module = safe_import(
+    ["config.settings", "...config.settings"]
+)
+DOCS_DIR = settings_module.DOCS_DIR
+LOGS_DIR = settings_module.LOGS_DIR
+
+def get_server_name():
+    """
+    Получить имя сервера из переменной окружения с безопасным дефолтом
+    
+    Returns:
+        str: Имя сервера для привязки (127.0.0.1 по умолчанию для безопасности)
+    """
+    server_name = os.environ.get('GRADIO_SERVER_NAME', '127.0.0.1')
+    
+    # Валидация и нормализация
+    if not server_name or not isinstance(server_name, str):
+        server_name = '127.0.0.1'
+    
+    server_name = server_name.strip()
+    
+    # Предупреждение при использовании небезопасного значения
+    if server_name == '0.0.0.0':
+        print("⚠️  ВНИМАНИЕ: Сервер привязан к 0.0.0.0 - доступен извне!")
+        print("   Убедитесь, что это намеренно (например, за прокси)")
+    
+    return server_name
 
 class GradioDashboard:
     """Простой дашборд для управления парсером"""
@@ -256,7 +282,8 @@ class GradioDashboard:
     def launch(self, share=False, port=7860):
         """Запустить дашборд"""
         interface = self.create_interface()
-        interface.launch(share=share, server_port=port, server_name="0.0.0.0")
+        server_name = get_server_name()
+        interface.launch(share=share, server_port=port, server_name=server_name)
 
 # Создание и запуск дашборда
 if __name__ == "__main__":

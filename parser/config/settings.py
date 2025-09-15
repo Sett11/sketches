@@ -13,6 +13,10 @@ def _get_base_dir():
     if env_dir:
         return os.path.expanduser(env_dir)
     
+    # В Docker контейнере используем /app
+    if os.path.exists('/app'):
+        return '/app'
+    
     # Используем XDG_DATA_HOME если доступен, иначе fallback на ~/.local/share/parser
     xdg_data_home = os.environ.get('XDG_DATA_HOME')
     if xdg_data_home:
@@ -55,11 +59,19 @@ URLS = {
 SEARCH_REQUEST_CONFIG = {
     "method": "POST",
     "headers": {
-        "Content-Type": "application/json",
-        "Accept": "*/*",
+        "Content-Type": "application/json; charset=UTF-8",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
         "Origin": "https://kad.arbitr.ru",
         "Referer": "https://kad.arbitr.ru/",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "X-Requested-With": "XMLHttpRequest",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin"
     },
     "required_cookies": ["pr_fp"],  # Обязательные cookies (wasm может отсутствовать)
     "json_template": {

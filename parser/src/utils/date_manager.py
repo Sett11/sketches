@@ -37,21 +37,9 @@ class DateManager:
             raise ValueError(f"date_step не может быть булевым значением, получено: {date_step}")
         
         try:
-            # Обрабатываем строки
-            if isinstance(date_step, str):
-                # Пытаемся преобразовать в float для проверки
-                float_val = float(date_step)
-                if not float_val.is_integer():
-                    raise _IntegerishError(f"date_step должен быть целым числом, получено нецелое десятичное: {date_step}")
-                date_step = int(float_val)
-            # Обрабатываем float
-            elif isinstance(date_step, float):
-                if not date_step.is_integer():
-                    raise _IntegerishError(f"date_step должен быть целым числом, получено нецелое десятичное: {date_step}")
-                date_step = int(date_step)
-            # Обрабатываем другие типы
-            elif not isinstance(date_step, int):
-                # Пытаемся преобразовать в float для проверки
+            # Если уже int, оставляем как есть
+            if not isinstance(date_step, int):
+                # Для всех не-int типов: единый путь валидации
                 float_val = float(date_step)
                 if not float_val.is_integer():
                     raise _IntegerishError(f"date_step должен быть целым числом, получено нецелое десятичное: {date_step}")

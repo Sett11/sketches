@@ -153,12 +153,19 @@ class BatchParser:
             return []
         else:
             logger.info(f"✅ Найдены обязательные cookies: {SEARCH_REQUEST_CONFIG.get('required_cookies', [])}")
-            logger.info(f"✅ Всего cookies в сессии: {len(self.session.cookies)}")
-            for cookie in self.session.cookies:
-                logger.info(f"   - {cookie.name}: {cookie.value[:20]}...")
+            if getattr(self, "session", None) and getattr(self.session, "cookies", None):
+                logger.info(f"✅ Всего cookies в сессии: {len(self.session.cookies)}")
+                for cookie in self.session.cookies:
+                    logger.info(f"   - {cookie.name}: {cookie.value[:20]}...")
+            else:
+                logger.info("✅ Cookies в сессии отсутствуют")
         
         try:
             rate_limiter.make_request()
+            
+            # Добавляем задержку для имитации человеческого поведения
+            import time
+            time.sleep(PARSING_SETTINGS.get("request_delay_seconds", 2))
             
             # Используем заголовки из конфигурации
             headers = SEARCH_REQUEST_CONFIG["headers"].copy()
