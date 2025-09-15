@@ -44,6 +44,16 @@ create_batch_parser = safe_import(
     "create_batch_parser"
 )
 
+create_puppeteer_batch_parser = safe_import(
+    ["src.core.puppeteer_batch_parser", "..core.puppeteer_batch_parser"],
+    "create_puppeteer_batch_parser"
+)
+
+create_cookie_automation = safe_import(
+    ["src.core.cookie_automation", "..core.cookie_automation"],
+    "create_cookie_automation"
+)
+
 cookie_manager = safe_import(
     ["src.utils.cookie_manager", "..utils.cookie_manager"],
     "cookie_manager"
@@ -86,7 +96,30 @@ class GradioDashboard:
     """Простой дашборд для управления парсером"""
     
     def __init__(self):
-        self.parser = create_batch_parser()
+        self.parser = None
+        self.parser_type = "puppeteer"  # По умолчанию используем Puppeteer
+        self.cookie_automation = create_cookie_automation()
+        self.initialize_parser()
+    
+    def initialize_parser(self):
+        """Инициализация парсера"""
+        try:
+            if self.parser_type == "puppeteer":
+                self.parser = create_puppeteer_batch_parser()
+                # Инициализируем браузер
+                if not self.parser.initialize():
+                    print("❌ Ошибка инициализации Puppeteer, переключаемся на requests")
+                    self.parser_type = "requests"
+                    self.parser = create_batch_parser()
+            else:
+                self.parser = create_batch_parser()
+                
+            print(f"✅ Парсер инициализирован: {self.parser_type}")
+        except Exception as e:
+            print(f"❌ Ошибка инициализации парсера: {e}")
+            # Fallback на requests парсер
+            self.parser_type = "requests"
+            self.parser = create_batch_parser()
     
     def start_parsing(self, start_date, end_date, cookies_text):
         """Запустить парсинг"""
@@ -105,38 +138,64 @@ class GradioDashboard:
             start_dt = datetime.strptime(start_date, "%Y-%m-%d")
             end_dt = datetime.strptime(end_date, "%Y-%m-%d")
             
-            # Генерируем диапазоны дат
-            date_ranges = date_manager.generate_date_ranges(start_dt, end_dt)
-            
-            results = []
-            total_downloaded = 0
-            
-            for date_range in date_ranges:
-                result = self.parser.process_date_range(
-                    date_range["start"], 
-                    date_range["end"]
+            if self.parser_type == "puppeteer":
+                # Используем Puppeteer для обработки всего диапазона
+                total_downloaded = self.parser.process_date_range(
+                    start_date, 
+                    end_date, 
+                    max_pages=40
                 )
-                total_downloaded += result
-                results.append(f"Период {date_range['start'][:10]} - {date_range['end'][:10]}: {result} документов")
-            
-            # Сохраняем метаданные
-            self.parser.save_metadata()
-            
-            stats = self.parser.get_stats()
-            
-            return f"""
-            ✅ Парсинг завершен!
-            
-            📊 Статистика:
-            • Скачано документов: {total_downloaded}
-            • Запросов использовано: {stats['rate_limiter_status']['requests_made']}
-            • Осталось запросов: {stats['rate_limiter_status']['remaining']}
-            
-            📁 Файлы сохранены в: {DOCS_DIR}
-            
-            📋 Обработанные периоды:
-            {chr(10).join(results)}
-            """
+                
+                # Сохраняем метаданные
+                self.parser.save_metadata()
+                
+                stats = self.parser.get_stats()
+                
+                return f"""
+                ✅ Парсинг завершен через Puppeteer!
+                
+                📊 Статистика:
+                • Скачано документов: {total_downloaded}
+                • Парсер: {self.parser_type}
+                • Статус: {stats.get('is_initialized', False)}
+                
+                📁 Файлы сохранены в: {DOCS_DIR}
+                
+                🚀 Puppeteer успешно обошел anti-bot защиту!
+                """
+            else:
+                # Используем старый requests подход
+                date_ranges = date_manager.generate_date_ranges(start_dt, end_dt)
+                
+                results = []
+                total_downloaded = 0
+                
+                for date_range in date_ranges:
+                    result = self.parser.process_date_range(
+                        date_range["start"], 
+                        date_range["end"]
+                    )
+                    total_downloaded += result
+                    results.append(f"Период {date_range['start'][:10]} - {date_range['end'][:10]}: {result} документов")
+                
+                # Сохраняем метаданные
+                self.parser.save_metadata()
+                
+                stats = self.parser.get_stats()
+                
+                return f"""
+                ✅ Парсинг завершен через requests!
+                
+                📊 Статистика:
+                • Скачано документов: {total_downloaded}
+                • Запросов использовано: {stats['rate_limiter_status']['requests_made']}
+                • Осталось запросов: {stats['rate_limiter_status']['remaining']}
+                
+                📁 Файлы сохранены в: {DOCS_DIR}
+                
+                📋 Обработанные периоды:
+                {chr(10).join(results)}
+                """
             
         except Exception as e:
             return f"❌ Ошибка: {str(e)}"
@@ -153,14 +212,27 @@ class GradioDashboard:
             # Статус cookies
             cookies_status = "✅ Загружены" if cookie_manager.is_valid() else "❌ Не загружены"
             
-            return f"""
-            📊 Текущая статистика:
-            
-            📁 Документы: {docs_count} PDF файлов
-            🍪 Cookies: {cookies_status}
-            📈 Запросов сегодня: {stats['rate_limiter_status']['requests_made']}/{stats['rate_limiter_status']['max_requests']}
-            ⏰ Сброс лимита: {stats['rate_limiter_status']['daily_reset'].strftime('%H:%M:%S')}
-            """
+            if self.parser_type == "puppeteer":
+                return f"""
+                📊 Текущая статистика (Puppeteer):
+                
+                📁 Документы: {docs_count} PDF файлов
+                🍪 Cookies: {cookies_status}
+                🚀 Парсер: Puppeteer с stealth плагином
+                📈 Скачано: {stats.get('downloaded_count', 0)} документов
+                ⚙️ Инициализирован: {stats.get('is_initialized', False)}
+                📅 Последнее обновление: {stats.get('last_update', 'Неизвестно')}
+                """
+            else:
+                return f"""
+                📊 Текущая статистика (Requests):
+                
+                📁 Документы: {docs_count} PDF файлов
+                🍪 Cookies: {cookies_status}
+                🚀 Парсер: Requests
+                📈 Запросов сегодня: {stats['rate_limiter_status']['requests_made']}/{stats['rate_limiter_status']['max_requests']}
+                ⏰ Сброс лимита: {stats['rate_limiter_status']['daily_reset'].strftime('%H:%M:%S')}
+                """
             
         except Exception as e:
             return f"❌ Ошибка получения статистики: {str(e)}"
@@ -176,6 +248,39 @@ class GradioDashboard:
                 return "❌ Файл не найден"
         except Exception as e:
             return f"❌ Ошибка загрузки файла: {str(e)}"
+    
+    def auto_extract_cookies(self):
+        """Автоматически извлечь cookies"""
+        try:
+            result = self.cookie_automation.extract_cookies(save_to_file=True)
+            
+            if result['success']:
+                cookies_json = json.dumps(result['cookies'], ensure_ascii=False, indent=2)
+                
+                return f"""✅ Cookies автоматически собраны!
+
+🍪 Статистика:
+• Всего cookies: {result['validation']['foundCookies'].__len__()}
+• Критически важных: {len(result['validation']['criticalCookies'])}
+• Статус: {'✅ Валидны' if result['validation']['isValid'] else '⚠️ Требуют проверки'}
+
+📁 Сохранено в: {DOCS_DIR}/auto_extracted_cookies.json
+
+🚀 Теперь можно запускать парсинг!
+
+{cookies_json}"""
+            else:
+                return f"""❌ Ошибка автоматического сбора cookies:
+
+{result.get('error', 'Неизвестная ошибка')}
+
+💡 Попробуйте:
+1. Проверить интернет соединение
+2. Убедиться что kad.arbitr.ru доступен
+3. Повторить попытку через несколько минут"""
+                
+        except Exception as e:
+            return f"❌ Критическая ошибка: {str(e)}"
     
     def create_interface(self):
         """Создать интерфейс"""
@@ -211,6 +316,10 @@ class GradioDashboard:
                         start_btn = gr.Button("🚀 Начать парсинг", variant="primary")
                         stats_btn = gr.Button("📊 Статистика")
                     
+                    with gr.Row():
+                        auto_cookies_btn = gr.Button("🍪 Авто-сбор cookies", variant="secondary")
+                        clear_btn = gr.Button("🗑️ Очистить", variant="stop")
+                    
                     cookie_file = gr.File(
                         label="Или загрузить cookies из файла",
                         file_types=[".json"]
@@ -245,9 +354,26 @@ class GradioDashboard:
                 outputs=cookies_input
             )
             
+            auto_cookies_btn.click(
+                fn=self.auto_extract_cookies,
+                inputs=[],
+                outputs=cookies_input
+            )
+            
+            clear_btn.click(
+                fn=lambda: "",
+                inputs=[],
+                outputs=cookies_input
+            )
+            
             # Информация
             gr.Markdown("""
             ## ℹ️ Информация
+            
+            **🚀 Автоматический сбор cookies:**
+            - Нажмите "🍪 Авто-сбор cookies" для автоматического получения всех нужных cookies
+            - Puppeteer автоматически обойдет anti-bot защиту
+            - Cookies будут сохранены и готовы к использованию
             
             **Ограничения:**
             - Максимум 500 запросов в день
@@ -258,7 +384,7 @@ class GradioDashboard:
             - ✅ Включаем: решения, кассации, постановления
             - ❌ Исключаем: переносы, отклонения, назначения времени
             
-            ## 🍪 Как получить Cookies:
+            ## 🍪 Ручной способ получения Cookies (если авто-сбор не работает):
             
             1. Откройте https://kad.arbitr.ru в браузере
             2. Откройте Developer Tools (F12)
@@ -272,6 +398,7 @@ class GradioDashboard:
             ```
             
             **⚠️ Важно:** 
+            - 🚀 **РЕКОМЕНДУЕТСЯ**: Использовать автоматический сбор cookies!
             - Без `pr_fp` парсинг НЕ РАБОТАЕТ!
             - Cookies работают ограниченное время, затем нужно обновлять!
             - Другие cookies (`wasm`, `PHPSESSID` и т.д.) опциональны
