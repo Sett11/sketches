@@ -10,3 +10,5 @@ parser/cookies.json
 parser/config/cookies.json
 
 node_modules/
+
+venv
