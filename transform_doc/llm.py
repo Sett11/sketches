@@ -55,7 +55,7 @@ class OpenRouterClient:
                 
                 # Добавляем опциональные заголовки если они указаны
                 if self.site_url:
-                    headers["HTTP-Referer"] = self.site_url
+                    headers["Referer"] = self.site_url
                 if self.site_name:
                     headers["X-Title"] = self.site_name
                 
@@ -80,8 +80,12 @@ class OpenRouterClient:
                     completion_tokens = usage.get('completion_tokens', 0)
                     
                     if idop != 0:
-                        # insert_system_log(idop, "LLM", self.model_name, prompt_tokens, completion_tokens)
-                        pass
+                        try:
+                            # Note: insert_system_log function needs to be implemented or imported
+                            # For now, we'll log the information using the existing logger
+                            logger.info(f"LLM call - idop: {idop}, model: {self.model_name}, prompt_tokens: {int(prompt_tokens)}, completion_tokens: {int(completion_tokens)}")
+                        except Exception as e:
+                            logger.error(f"Failed to log system call: {e}")
                     else:
                         logger.info("Call with NULL idop")
                     

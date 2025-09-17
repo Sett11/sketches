@@ -4,6 +4,7 @@
 """
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from word_processor import WordProcessor
 from llm import OpenRouterClient
@@ -41,11 +42,20 @@ def test_openrouter():
         demo_file = docs_files[0]
         print(f"📄 Тестируем с файлом: {demo_file}")
         
+        # Строим абсолютный путь к файлу
+        demo_file_path = str(Path(__file__).parent / "docs" / demo_file)
+        print(f"📁 Полный путь к файлу: {demo_file_path}")
+        
+        # Проверяем существование файла
+        if not os.path.exists(demo_file_path):
+            print(f"❌ Файл не найден: {demo_file_path}")
+            return
+        
         # Простой промт для теста
         prompt = "Измени все упоминания слова 'философия' на 'философствование' в тексте документа."
         
         # Обрабатываем документ
-        result = processor.process_document(demo_file, prompt, llm_client)
+        result = processor.process_document(demo_file_path, prompt, llm_client)
         
         if result:
             print(f"✅ Документ обработан успешно: {result}")

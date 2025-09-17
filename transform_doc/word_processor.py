@@ -105,24 +105,29 @@ class WordProcessor:
         return output_path
     
     def _extract_text_from_document(self) -> str:
-        """Извлекает весь текст из документа для отправки в LLM"""
+        """Извлекает весь текст из документа для отправки в LLM с уникальными маркерами"""
         if not self.document:
             raise ValueError("Документ не загружен!")
         
         text_parts = []
+        self.element_markers = []  # Сохраняем маркеры для последующего использования
         
         # Извлекаем текст из параграфов (включая пустые)
-        for paragraph in self.document.paragraphs:
-            text_parts.append(paragraph.text.strip())
+        for i, paragraph in enumerate(self.document.paragraphs):
+            marker = f"PARA_{i:04d}"
+            self.element_markers.append(('paragraph', i, marker))
+            text_parts.append(f"[{marker}] {paragraph.text.strip()}")
         
-        # Извлекаем текст из таблиц
+        # Извлекаем текст из таблиц (по одной строке на ячейку)
+        table_idx = 0
         for table in self.document.tables:
-            for row in table.rows:
-                row_text = []
-                for cell in row.cells:
+            for row_idx, row in enumerate(table.rows):
+                for cell_idx, cell in enumerate(row.cells):
+                    marker = f"CELL_{table_idx:02d}_{row_idx:02d}_{cell_idx:02d}"
+                    self.element_markers.append(('table_cell', table_idx, row_idx, cell_idx, marker))
                     cell_text = cell.text.strip()
-                    row_text.append(cell_text)
-                text_parts.append(" | ".join(row_text))
+                    text_parts.append(f"[{marker}] {cell_text}")
+            table_idx += 1
         
         self.logger.info(f"Извлечено элементов: {len(text_parts)} (параграфов: {len(self.document.paragraphs)}, таблиц: {len(self.document.tables)})")
         return "\n".join(text_parts)
@@ -155,6 +160,8 @@ class WordProcessor:
 8. НЕ разбивай длинные строки на несколько строк
 9. НЕ объединяй короткие строки в одну
 10. Сохрани точную структуру документа
+11. ОБЯЗАТЕЛЬНО сохрани все маркеры [PARA_XXXX] и [CELL_XX_XX_XX] в начале каждой строки
+12. Изменяй только текст после маркера, НЕ трогай сам маркер
 """
             
             # Подготавливаем сообщения для LLM
@@ -195,61 +202,81 @@ class WordProcessor:
         print("🔧 Применяем изменения от LLM...")
         self.logger.info(f"Применяем изменения от LLM, длина текста: {len(modified_text)} символов")
 
-        # Получаем оригинальный текст для сравнения
-        original_text = self._extract_text_from_document()
-        self.logger.info(f"Оригинальный текст, длина: {len(original_text)} символов")
-
-        # Разбиваем измененный текст на строки
-        modified_lines = [line.strip() for line in modified_text.split('\n') if line.strip()]
+        # Разбиваем измененный текст на строки, сохраняя пустые строки
+        modified_lines = [line.rstrip() for line in modified_text.split('\n')]
         self.logger.info(f"LLM вернул {len(modified_lines)} строк")
 
-        # Подсчитываем общее количество элементов для обновления
-        total_paragraphs = len(self.document.paragraphs)
-        total_table_cells = sum(len(table.rows) * len(table.rows[0].cells) for table in self.document.tables if table.rows)
-        total_elements = total_paragraphs + total_table_cells
+        # Создаем словарь для быстрого поиска по маркерам
+        marker_to_text = {}
+        lines_without_markers = []
         
-        self.logger.info(f"Всего элементов для обновления: {total_elements} (параграфов: {total_paragraphs}, ячеек таблиц: {total_table_cells})")
+        for i, line in enumerate(modified_lines):
+            if line.startswith('[') and ']' in line:
+                marker_end = line.find(']')
+                marker = line[1:marker_end]
+                text_content = line[marker_end + 1:].strip()
+                marker_to_text[marker] = text_content
+            else:
+                # Fallback для строк без маркеров
+                lines_without_markers.append((i, line))
+                self.logger.warning(f"Строка {i+1} без маркера: {line[:50]}...")
 
-        # Если LLM вернул больше строк, чем элементов, объединяем лишние строки
-        if len(modified_lines) > total_elements:
-            self.logger.warning(f"LLM вернул {len(modified_lines)} строк, но в документе только {total_elements} элементов. Объединяем лишние строки.")
-            # Объединяем лишние строки с последней
-            extra_lines = modified_lines[total_elements-1:]
-            modified_lines = modified_lines[:total_elements-1]
-            if extra_lines:
-                modified_lines.append(" ".join(extra_lines))
-        elif len(modified_lines) < total_elements:
-            self.logger.warning(f"LLM вернул {len(modified_lines)} строк, но в документе {total_elements} элементов. Дополняем пустыми строками.")
-            modified_lines.extend([""] * (total_elements - len(modified_lines)))
+        # Валидация: проверяем соответствие количества элементов
+        expected_elements = len(self.element_markers)
+        actual_elements = len(modified_lines)
+        
+        if expected_elements != actual_elements:
+            error_msg = f"Несоответствие количества элементов: ожидалось {expected_elements}, получено {actual_elements}"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        # Проверяем, есть ли строки без маркеров для fallback
+        use_fallback = len(lines_without_markers) > 0
+        if use_fallback:
+            self.logger.warning(f"Используем fallback режим для {len(lines_without_markers)} строк без маркеров")
 
-        line_index = 0
         paragraphs_updated = 0
         tables_updated = 0
 
-        # Обновляем параграфы
-        for paragraph in self.document.paragraphs:
-            if line_index < len(modified_lines):
-                new_text = modified_lines[line_index]
+        # Обновляем элементы по маркерам или позиционно (fallback)
+        line_index = 0
+        for element_info in self.element_markers:
+            if element_info[0] == 'paragraph':
+                _, para_idx, marker = element_info
+                if marker in marker_to_text:
+                    new_text = marker_to_text[marker]
+                elif use_fallback and line_index < len(modified_lines):
+                    new_text = modified_lines[line_index]
+                    self.logger.info(f"Fallback: используем позиционный подход для параграфа {para_idx}")
+                else:
+                    self.logger.warning(f"Маркер {marker} не найден в ответе LLM")
+                    continue
+                
+                paragraph = self.document.paragraphs[para_idx]
                 self._update_paragraph_text(paragraph, new_text)
-                line_index += 1
                 paragraphs_updated += 1
+            
+            elif element_info[0] == 'table_cell':
+                _, table_idx, row_idx, cell_idx, marker = element_info
+                if marker in marker_to_text:
+                    new_text = marker_to_text[marker]
+                elif use_fallback and line_index < len(modified_lines):
+                    new_text = modified_lines[line_index]
+                    self.logger.info(f"Fallback: используем позиционный подход для ячейки {table_idx}-{row_idx}-{cell_idx}")
+                else:
+                    self.logger.warning(f"Маркер {marker} не найден в ответе LLM")
+                    continue
+                
+                table = self.document.tables[table_idx]
+                cell = table.rows[row_idx].cells[cell_idx]
+                # Обновляем все параграфы в ячейке
+                for paragraph in cell.paragraphs:
+                    self._update_paragraph_text(paragraph, new_text)
+                tables_updated += 1
+            
+            line_index += 1
 
-        # Обновляем таблицы
-        for table in self.document.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    for paragraph in cell.paragraphs:
-                        if line_index < len(modified_lines):
-                            new_text = modified_lines[line_index]
-                            # Убираем разделители таблицы если они есть
-                            if " | " in new_text:
-                                new_text = new_text.split(" | ")[0]  # Берем только первую часть
-                            self._update_paragraph_text(paragraph, new_text)
-                            line_index += 1
-                            tables_updated += 1
-
-        self.logger.info(f"Обновлено параграфов: {paragraphs_updated}, таблиц: {tables_updated}")
-        self.logger.info(f"Использовано строк из LLM: {line_index} из {len(modified_lines)}")
+        self.logger.info(f"Обновлено параграфов: {paragraphs_updated}, ячеек таблиц: {tables_updated}")
         print("✅ Изменения от LLM применены")
     
     def apply_changes(self, changes: Dict[str, str]) -> 'WordProcessor':
