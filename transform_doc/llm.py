@@ -2,22 +2,28 @@ import os
 import requests
 import time
 import json
+from dotenv import load_dotenv
 from mylogger import Logger
 
-logger=Logger('LLM GEMINI', 'logs/_llmcall.log')
+# Загружаем переменные окружения из .env файла
+load_dotenv()
 
-class GeminiClient:
-    def __init__(self, model_name: str = None, api_key: str = None):
+logger=Logger('LLM OPENROUTER', 'logs/_llmcall.log')
+
+class OpenRouterClient:
+    def __init__(self, model_name: str = None, api_key: str = None, site_url: str = None, site_name: str = None):
         # Получаем значения из переменных окружения, если не переданы явно
-        self.api_key = api_key or os.getenv('GEMINI_API_KEY')
-        self.model_name = model_name or os.getenv('MODEL_NAME', 'gemini-2.0-flash')
+        self.api_key = api_key or os.getenv('API_KEY')
+        self.model_name = model_name or os.getenv('MODEL_NAME', 'openai/gpt-4o')
+        self.site_url = site_url or os.getenv('SITE_URL', '')
+        self.site_name = site_name or os.getenv('SITE_NAME', '')
         
         if not self.api_key:
-            raise ValueError("GEMINI_API_KEY не найден в переменных окружения или не передан явно")
+            raise ValueError("API_KEY не найден в переменных окружения или не передан явно")
         
-        self.base_url = "https://generativelanguage.googleapis.com/v1beta/models"
+        self.base_url = "https://openrouter.ai/api/v1/chat/completions"
         
-        logger.info(f"GeminiClient инициализирован: model={self.model_name}")
+        logger.info(f"OpenRouterClient инициализирован: model={self.model_name}")
 
     def generate(
         self,
@@ -29,9 +35,9 @@ class GeminiClient:
         idop: int = 0
     ):
         """
-        Вызывает Gemini API с обработкой исключений.
+        Вызывает OpenRouter API с обработкой исключений.
         
-        :param messages: Список сообщений в формате OpenAI (будет преобразован в Gemini формат)
+        :param messages: Список сообщений в формате OpenAI
         :param max_retries: Максимальное количество попыток
         :param delay: Задержка между попытками (в секундах)
         :param temperature: Параметр температуры для генерации
@@ -40,54 +46,48 @@ class GeminiClient:
         """
         retries = 0
         
-        # Преобразуем сообщения в формат Gemini
-        gemini_prompt = self._convert_messages_to_gemini_format(messages)
-        
         while retries < max_retries:
             try:
-                url = f"{self.base_url}/{self.model_name}:generateContent"
                 headers = {
-                    'Content-Type': 'application/json',
-                    'X-goog-api-key': self.api_key
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
                 }
+                
+                # Добавляем опциональные заголовки если они указаны
+                if self.site_url:
+                    headers["HTTP-Referer"] = self.site_url
+                if self.site_name:
+                    headers["X-Title"] = self.site_name
                 
                 data = {
-                    "contents": [
-                        {
-                            "parts": [
-                                {
-                                    "text": gemini_prompt
-                                }
-                            ]
-                        }
-                    ],
-                    "generationConfig": {
-                        "temperature": temperature,
-                        "maxOutputTokens": max_tokens
-                    }
+                    "model": self.model_name,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens
                 }
                 
-                response = requests.post(url, headers=headers, json=data)
+                response = requests.post(self.base_url, headers=headers, json=data)
                 response.raise_for_status()
                 
                 result = response.json()
                 
-                if 'candidates' in result and len(result['candidates']) > 0:
-                    content = result['candidates'][0]['content']['parts'][0]['text']
+                if 'choices' in result and len(result['choices']) > 0:
+                    content = result['choices'][0]['message']['content']
                     
-                    # Подсчитываем примерные токены (Gemini не возвращает точные значения)
-                    prompt_tokens = len(gemini_prompt.split()) * 1.3  # Примерная оценка
-                    completion_tokens = len(content.split()) * 1.3
+                    # Получаем информацию о токенах если доступна
+                    usage = result.get('usage', {})
+                    prompt_tokens = usage.get('prompt_tokens', 0)
+                    completion_tokens = usage.get('completion_tokens', 0)
                     
                     if idop != 0:
-                        # insert_system_log(idop, "LLM", self.model_name, int(prompt_tokens), int(completion_tokens))
+                        # insert_system_log(idop, "LLM", self.model_name, prompt_tokens, completion_tokens)
                         pass
                     else:
                         logger.info("Call with NULL idop")
                     
-                    return (content, int(prompt_tokens), int(completion_tokens))
+                    return (content, prompt_tokens, completion_tokens)
                 else:
-                    logger.error("No candidates in Gemini response")
+                    logger.error("No choices in OpenRouter response")
                     return None
             
             except requests.exceptions.RequestException as e:
@@ -106,33 +106,10 @@ class GeminiClient:
         logger.error("Max retries reached. Failed to get response.")
         return None
 
-    def _convert_messages_to_gemini_format(self, messages: list) -> str:
-        """
-        Преобразует сообщения из формата OpenAI в формат Gemini.
-        
-        :param messages: Список сообщений в формате OpenAI
-        :return: Объединенный текст для Gemini
-        """
-        result = []
-        for message in messages:
-            role = message.get("role", "")
-            content = message.get("content", "")
-            
-            if role == "system":
-                result.append(f"System: {content}")
-            elif role == "user":
-                result.append(f"User: {content}")
-            elif role == "assistant":
-                result.append(f"Assistant: {content}")
-            else:
-                result.append(content)
-        
-        return "\n\n".join(result)
-
     @staticmethod
     def prepare_messages(prompt: str, system_message: str = "") -> list:
         """
-        Формирует список сообщений для API (совместимый с OpenAI форматом).
+        Формирует список сообщений для OpenRouter API (совместимый с OpenAI форматом).
         
         :param prompt: Пользовательский промпт
         :param system_message: Системное сообщение (опционально)

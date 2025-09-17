@@ -1,28 +1,32 @@
 #!/usr/bin/env python3
 """
-Тест работы с Gemini API
+Тест работы с OpenRouter API
 """
 
 import os
+from dotenv import load_dotenv
 from word_processor import WordProcessor
-from llm import GeminiClient
+from llm import OpenRouterClient
 
-def test_gemini():
-    """Тестируем работу с Gemini API"""
+# Загружаем переменные окружения из .env файла
+load_dotenv()
+
+def test_openrouter():
+    """Тестируем работу с OpenRouter API"""
     
     # Проверяем переменные окружения
-    api_key = os.getenv('GEMINI_API_KEY')
+    api_key = os.getenv('API_KEY')
     if not api_key:
-        print("❌ GEMINI_API_KEY не найден в переменных окружения")
-        print("💡 Установите переменную: set GEMINI_API_KEY=your_key_here")
+        print("❌ API_KEY не найден в переменных окружения")
+        print("💡 Установите переменную: set API_KEY=your_key_here")
         return
     
-    print("✅ GEMINI_API_KEY найден")
+    print("✅ API_KEY найден")
     
     try:
         # Создаем клиент
-        llm_client = GeminiClient()
-        print("✅ GeminiClient создан успешно")
+        llm_client = OpenRouterClient()
+        print("✅ OpenRouterClient создан успешно")
         
         # Создаем процессор
         processor = WordProcessor()
@@ -54,4 +58,4 @@ def test_gemini():
         traceback.print_exc()
 
 if __name__ == "__main__":
-    test_gemini()
+    test_openrouter()

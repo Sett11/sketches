@@ -8,6 +8,7 @@ import os
 import traceback
 from datetime import datetime
 from typing import Dict, List
+from dotenv import load_dotenv
 
 from docx import Document
 from docx.shared import Inches, Pt
@@ -15,7 +16,10 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 
 from mylogger import Logger
-from llm import GeminiClient
+from llm import OpenRouterClient
+
+# Загружаем переменные окружения из .env файла
+load_dotenv()
 
 class WordProcessor:
     """Простой процессор Word документов с сохранением форматирования"""
@@ -107,10 +111,9 @@ class WordProcessor:
         
         text_parts = []
         
-        # Извлекаем текст из параграфов
+        # Извлекаем текст из параграфов (включая пустые)
         for paragraph in self.document.paragraphs:
-            if paragraph.text.strip():
-                text_parts.append(paragraph.text.strip())
+            text_parts.append(paragraph.text.strip())
         
         # Извлекаем текст из таблиц
         for table in self.document.tables:
@@ -118,26 +121,40 @@ class WordProcessor:
                 row_text = []
                 for cell in row.cells:
                     cell_text = cell.text.strip()
-                    if cell_text:
-                        row_text.append(cell_text)
-                if row_text:
-                    text_parts.append(" | ".join(row_text))
+                    row_text.append(cell_text)
+                text_parts.append(" | ".join(row_text))
         
+        self.logger.info(f"Извлечено элементов: {len(text_parts)} (параграфов: {len(self.document.paragraphs)}, таблиц: {len(self.document.tables)})")
         return "\n".join(text_parts)
+    
     
     def _process_with_llm(self, document_text: str, prompt: str, llm_client) -> str:
         """Отправляет текст в LLM и получает измененный результат"""
         try:
             self.logger.info("Начинаем обработку текста в LLM")
             
+            # Подсчитываем количество строк в оригинальном тексте
+            original_lines = document_text.split('\n')
+            line_count = len(original_lines)
+            
             # Формируем полный промт
             full_prompt = f"""
 {prompt}
 
-Текст документа для обработки:
+Текст документа для обработки (всего {line_count} строк):
 {document_text}
 
-ВАЖНО: Верни только измененный текст документа, сохраняя структуру и форматирование. Не добавляй дополнительных комментариев или объяснений.
+КРИТИЧЕСКИ ВАЖНО: 
+1. Верни ТОЛЬКО измененный текст документа
+2. Сохрани ТОЧНО {line_count} строк - ни больше, ни меньше
+3. Каждая строка должна соответствовать оригинальной строке по порядку
+4. Если строка пустая в оригинале, оставь её пустой
+5. Не добавляй дополнительных комментариев, объяснений или форматирования
+6. Не изменяй количество строк в документе
+7. Верни результат в том же формате: каждая строка на новой строке
+8. НЕ разбивай длинные строки на несколько строк
+9. НЕ объединяй короткие строки в одну
+10. Сохрани точную структуру документа
 """
             
             # Подготавливаем сообщения для LLM
@@ -148,8 +165,18 @@ class WordProcessor:
             result = llm_client.generate(messages)
             
             if result and result[0]:
-                self.logger.info(f"LLM вернул результат, длина: {len(result[0])} символов")
-                return result[0]
+                modified_text = result[0]
+                self.logger.info(f"LLM вернул результат, длина: {len(modified_text)} символов")
+                
+                # Логируем первые несколько строк для отладки
+                lines = modified_text.split('\n')
+                self.logger.info(f"LLM вернул {len(lines)} строк")
+                for i, line in enumerate(lines[:5]):  # Показываем первые 5 строк
+                    self.logger.info(f"Строка {i+1}: '{line}'")
+                if len(lines) > 5:
+                    self.logger.info(f"... и еще {len(lines) - 5} строк")
+                
+                return modified_text
             else:
                 print("❌ LLM не вернул результат")
                 self.logger.error("LLM не вернул результат")
@@ -164,35 +191,65 @@ class WordProcessor:
         """Применяет изменения от LLM к документу с сохранением форматирования"""
         if not self.document:
             raise ValueError("Документ не загружен!")
-        
+
         print("🔧 Применяем изменения от LLM...")
-        
+        self.logger.info(f"Применяем изменения от LLM, длина текста: {len(modified_text)} символов")
+
+        # Получаем оригинальный текст для сравнения
+        original_text = self._extract_text_from_document()
+        self.logger.info(f"Оригинальный текст, длина: {len(original_text)} символов")
+
         # Разбиваем измененный текст на строки
-        modified_lines = modified_text.split('\n')
-        line_index = 0
+        modified_lines = [line.strip() for line in modified_text.split('\n') if line.strip()]
+        self.logger.info(f"LLM вернул {len(modified_lines)} строк")
+
+        # Подсчитываем общее количество элементов для обновления
+        total_paragraphs = len(self.document.paragraphs)
+        total_table_cells = sum(len(table.rows) * len(table.rows[0].cells) for table in self.document.tables if table.rows)
+        total_elements = total_paragraphs + total_table_cells
         
+        self.logger.info(f"Всего элементов для обновления: {total_elements} (параграфов: {total_paragraphs}, ячеек таблиц: {total_table_cells})")
+
+        # Если LLM вернул больше строк, чем элементов, объединяем лишние строки
+        if len(modified_lines) > total_elements:
+            self.logger.warning(f"LLM вернул {len(modified_lines)} строк, но в документе только {total_elements} элементов. Объединяем лишние строки.")
+            # Объединяем лишние строки с последней
+            extra_lines = modified_lines[total_elements-1:]
+            modified_lines = modified_lines[:total_elements-1]
+            if extra_lines:
+                modified_lines.append(" ".join(extra_lines))
+        elif len(modified_lines) < total_elements:
+            self.logger.warning(f"LLM вернул {len(modified_lines)} строк, но в документе {total_elements} элементов. Дополняем пустыми строками.")
+            modified_lines.extend([""] * (total_elements - len(modified_lines)))
+
+        line_index = 0
+        paragraphs_updated = 0
+        tables_updated = 0
+
         # Обновляем параграфы
         for paragraph in self.document.paragraphs:
-            if paragraph.text.strip() and line_index < len(modified_lines):
-                new_text = modified_lines[line_index].strip()
-                if new_text:
-                    self._update_paragraph_text(paragraph, new_text)
-                    line_index += 1
-        
+            if line_index < len(modified_lines):
+                new_text = modified_lines[line_index]
+                self._update_paragraph_text(paragraph, new_text)
+                line_index += 1
+                paragraphs_updated += 1
+
         # Обновляем таблицы
         for table in self.document.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for paragraph in cell.paragraphs:
-                        if paragraph.text.strip() and line_index < len(modified_lines):
-                            new_text = modified_lines[line_index].strip()
-                            if new_text:
-                                # Убираем разделители таблицы
-                                if " | " in new_text:
-                                    new_text = new_text.split(" | ")[0]  # Берем только первую часть
-                                self._update_paragraph_text(paragraph, new_text)
-                                line_index += 1
-        
+                        if line_index < len(modified_lines):
+                            new_text = modified_lines[line_index]
+                            # Убираем разделители таблицы если они есть
+                            if " | " in new_text:
+                                new_text = new_text.split(" | ")[0]  # Берем только первую часть
+                            self._update_paragraph_text(paragraph, new_text)
+                            line_index += 1
+                            tables_updated += 1
+
+        self.logger.info(f"Обновлено параграфов: {paragraphs_updated}, таблиц: {tables_updated}")
+        self.logger.info(f"Использовано строк из LLM: {line_index} из {len(modified_lines)}")
         print("✅ Изменения от LLM применены")
     
     def apply_changes(self, changes: Dict[str, str]) -> 'WordProcessor':
@@ -317,9 +374,9 @@ def main():
             print("📁 Папка docs пуста. Поместите .docx файлы в папку docs/ для обработки.")
             print("💡 Пример использования:")
             print("   from word_processor import WordProcessor")
-            print("   from llm import GeminiClient")
+            print("   from llm import OpenRouterClient")
             print("   processor = WordProcessor()")
-            print("   llm_client = GeminiClient()  # Использует GEMINI_API_KEY из env")
+            print("   llm_client = OpenRouterClient()  # Использует API_KEY из env")
             print("   result = processor.process_document('мой_файл.docx', 'промт для LLM', llm_client)")
             return
         
@@ -330,15 +387,14 @@ def main():
         # Пример промта для LLM
         prompt = """
 Измени текст документа согласно следующим требованиям:
-1. Замени все упоминания компаний на "ООО НОВАЯ КОМПАНИЯ"
-2. Замени все ИНН на "1111111111"
-3. Увеличь все суммы на 20%
-4. Сохрани структуру документа и форматирование
+1. Замени все упоминания "философия" на "философствование"
+2. Сохрани структуру документа и форматирование
+Верни итоговый текст целиком.
 """
         
         print("💡 Для полной работы с LLM необходимо:")
-        print("   1. Настроить GEMINI_API_KEY в переменных окружения")
-        print("   2. Создать экземпляр GeminiClient")
+        print("   1. Настроить API_KEY в переменных окружения")
+        print("   2. Создать экземпляр OpenRouterClient")
         print("   3. Передать его в process_document()")
         print("\n📝 Пример промта:")
         print(prompt)
