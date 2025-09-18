@@ -146,22 +146,10 @@ class WordProcessor:
             full_prompt = f"""
 {prompt}
 
-Текст документа для обработки (всего {line_count} строк):
+ТЕКСТ:
 {document_text}
 
-КРИТИЧЕСКИ ВАЖНО: 
-1. Верни ТОЛЬКО измененный текст документа
-2. Сохрани ТОЧНО {line_count} строк - ни больше, ни меньше
-3. Каждая строка должна соответствовать оригинальной строке по порядку
-4. Если строка пустая в оригинале, оставь её пустой
-5. Не добавляй дополнительных комментариев, объяснений или форматирования
-6. Не изменяй количество строк в документе
-7. Верни результат в том же формате: каждая строка на новой строке
-8. НЕ разбивай длинные строки на несколько строк
-9. НЕ объединяй короткие строки в одну
-10. Сохрани точную структуру документа
-11. ОБЯЗАТЕЛЬНО сохрани все маркеры [PARA_XXXX] и [CELL_XX_XX_XX] в начале каждой строки
-12. Изменяй только текст после маркера, НЕ трогай сам маркер
+Верни тот же текст с изменениями. Сохрани форматирование, шрифты, выравнивания, отступы и т.д.
 """
             
             # Подготавливаем сообщения для LLM
@@ -202,81 +190,39 @@ class WordProcessor:
         print("🔧 Применяем изменения от LLM...")
         self.logger.info(f"Применяем изменения от LLM, длина текста: {len(modified_text)} символов")
 
-        # Разбиваем измененный текст на строки, сохраняя пустые строки
-        modified_lines = [line.rstrip() for line in modified_text.split('\n')]
-        self.logger.info(f"LLM вернул {len(modified_lines)} строк")
-
-        # Создаем словарь для быстрого поиска по маркерам
-        marker_to_text = {}
-        lines_without_markers = []
+        # Убираем все маркеры из текста
+        clean_text = modified_text
+        import re
+        # Убираем маркеры типа [PARA_0013], [TABLE_001_001_001] и т.д.
+        clean_text = re.sub(r'\[[^\]]+\]\s*', '', clean_text)
+        # Убираем маркеры кодовых блоков ```
+        clean_text = re.sub(r'```[^`]*```', '', clean_text)
+        clean_text = re.sub(r'```', '', clean_text)
         
-        for i, line in enumerate(modified_lines):
-            if line.startswith('[') and ']' in line:
-                marker_end = line.find(']')
-                marker = line[1:marker_end]
-                text_content = line[marker_end + 1:].strip()
-                marker_to_text[marker] = text_content
-            else:
-                # Fallback для строк без маркеров
-                lines_without_markers.append((i, line))
-                self.logger.warning(f"Строка {i+1} без маркера: {line[:50]}...")
+        # Разбиваем на строки
+        modified_lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
+        self.logger.info(f"LLM вернул {len(modified_lines)} строк (маркеры удалены)")
 
-        # Валидация: проверяем соответствие количества элементов
-        expected_elements = len(self.element_markers)
-        actual_elements = len(modified_lines)
-        
-        if expected_elements != actual_elements:
-            error_msg = f"Несоответствие количества элементов: ожидалось {expected_elements}, получено {actual_elements}"
-            self.logger.error(error_msg)
-            raise ValueError(error_msg)
-        
-        # Проверяем, есть ли строки без маркеров для fallback
-        use_fallback = len(lines_without_markers) > 0
-        if use_fallback:
-            self.logger.warning(f"Используем fallback режим для {len(lines_without_markers)} строк без маркеров")
-
+        # Просто заменяем текст в параграфах по порядку
         paragraphs_updated = 0
-        tables_updated = 0
-
-        # Обновляем элементы по маркерам или позиционно (fallback)
-        line_index = 0
-        for element_info in self.element_markers:
-            if element_info[0] == 'paragraph':
-                _, para_idx, marker = element_info
-                if marker in marker_to_text:
-                    new_text = marker_to_text[marker]
-                elif use_fallback and line_index < len(modified_lines):
-                    new_text = modified_lines[line_index]
-                    self.logger.info(f"Fallback: используем позиционный подход для параграфа {para_idx}")
-                else:
-                    self.logger.warning(f"Маркер {marker} не найден в ответе LLM")
-                    continue
-                
-                paragraph = self.document.paragraphs[para_idx]
+        for i, paragraph in enumerate(self.document.paragraphs):
+            if i < len(modified_lines) and paragraph.text.strip():
+                new_text = modified_lines[i]
                 self._update_paragraph_text(paragraph, new_text)
                 paragraphs_updated += 1
-            
-            elif element_info[0] == 'table_cell':
-                _, table_idx, row_idx, cell_idx, marker = element_info
-                if marker in marker_to_text:
-                    new_text = marker_to_text[marker]
-                elif use_fallback and line_index < len(modified_lines):
-                    new_text = modified_lines[line_index]
-                    self.logger.info(f"Fallback: используем позиционный подход для ячейки {table_idx}-{row_idx}-{cell_idx}")
-                else:
-                    self.logger.warning(f"Маркер {marker} не найден в ответе LLM")
-                    continue
-                
-                table = self.document.tables[table_idx]
-                cell = table.rows[row_idx].cells[cell_idx]
-                # Обновляем все параграфы в ячейке
-                for paragraph in cell.paragraphs:
-                    self._update_paragraph_text(paragraph, new_text)
-                tables_updated += 1
-            
-            line_index += 1
 
-        self.logger.info(f"Обновлено параграфов: {paragraphs_updated}, ячеек таблиц: {tables_updated}")
+        # Заменяем текст в таблицах
+        tables_updated = 0
+        for table in self.document.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        if paragraph.text.strip() and paragraphs_updated + tables_updated < len(modified_lines):
+                            new_text = modified_lines[paragraphs_updated + tables_updated]
+                            self._update_paragraph_text(paragraph, new_text)
+                            tables_updated += 1
+
+        self.logger.info(f"Обновлено параграфов: {paragraphs_updated}, таблиц: {tables_updated}")
         print("✅ Изменения от LLM применены")
     
     def apply_changes(self, changes: Dict[str, str]) -> 'WordProcessor':
@@ -329,16 +275,37 @@ class WordProcessor:
     
     def _update_paragraph_text(self, paragraph, new_text: str):
         """Обновляет текст параграфа с сохранением форматирования"""
-        if paragraph.runs:
-            # Сохраняем форматирование первого run
-            first_run = paragraph.runs[0]
-            first_run.text = new_text
-            
-            # Очищаем остальные runs
-            for run in paragraph.runs[1:]:
-                run.text = ''
-        else:
-            # Если нет runs, просто заменяем текст
+        try:
+            if paragraph.runs:
+                # Сохраняем форматирование из первого run
+                first_run = paragraph.runs[0]
+                original_font = first_run.font
+                
+                # Очищаем параграф
+                paragraph.clear()
+                
+                # Добавляем новый текст с сохранением форматирования
+                new_run = paragraph.add_run(new_text)
+                
+                # Копируем форматирование шрифта
+                if original_font.name:
+                    new_run.font.name = original_font.name
+                if original_font.size:
+                    new_run.font.size = original_font.size
+                if original_font.bold is not None:
+                    new_run.font.bold = original_font.bold
+                if original_font.italic is not None:
+                    new_run.font.italic = original_font.italic
+                if original_font.underline is not None:
+                    new_run.font.underline = original_font.underline
+                if original_font.color.rgb:
+                    new_run.font.color.rgb = original_font.color.rgb
+            else:
+                # Если нет runs, просто заменяем текст
+                paragraph.text = new_text
+        except Exception as e:
+            self.logger.error(f"Ошибка при обновлении параграфа: {e}")
+            # Fallback - просто заменяем текст
             paragraph.text = new_text
     
     def save_document(self, output_path: str) -> 'WordProcessor':
@@ -415,7 +382,8 @@ def main():
         prompt = """
 Измени текст документа согласно следующим требованиям:
 1. Замени все упоминания "философия" на "философствование"
-2. Сохрани структуру документа и форматирование
+2. Увеличь все цифры в тексте на 1.
+3. Сохрани структуру документа, форматирование, шрифты, выравнивания, отступы и т.д.
 Верни итоговый текст целиком.
 """
         

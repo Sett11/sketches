@@ -14,7 +14,7 @@ class OpenRouterClient:
     def __init__(self, model_name: str = None, api_key: str = None, site_url: str = None, site_name: str = None):
         # Получаем значения из переменных окружения, если не переданы явно
         self.api_key = api_key or os.getenv('API_KEY')
-        self.model_name = model_name or os.getenv('MODEL_NAME', 'openai/gpt-4o')
+        self.model_name = model_name or os.getenv('MODEL_NAME', 'google/gemma-3-27b-it:free')
         self.site_url = site_url or os.getenv('SITE_URL', '')
         self.site_name = site_name or os.getenv('SITE_NAME', '')
         
