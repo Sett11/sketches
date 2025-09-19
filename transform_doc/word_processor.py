@@ -112,24 +112,111 @@ class WordProcessor:
         text_parts = []
         self.element_markers = []  # Сохраняем маркеры для последующего использования
         
-        # Извлекаем текст из параграфов (включая пустые)
+        # 1. Извлекаем текст из параграфов основного содержимого
         for i, paragraph in enumerate(self.document.paragraphs):
+            # Сохраняем даже пустые параграфы, так как они могут содержать форматирование
             marker = f"PARA_{i:04d}"
             self.element_markers.append(('paragraph', i, marker))
             text_parts.append(f"[{marker}] {paragraph.text.strip()}")
         
-        # Извлекаем текст из таблиц (по одной строке на ячейку)
+        # 2. Извлекаем текст из таблиц с улучшенной структурой
         table_idx = 0
         for table in self.document.tables:
+            # Добавляем маркеры начала и конца таблицы для контекста
+            table_start_marker = f"TABLE_START_{table_idx:02d}"
+            self.element_markers.append(('table_start', table_idx, table_start_marker))
+            text_parts.append(f"[{table_start_marker}]")
+            
+            # Обрабатываем каждую ячейку таблицы
             for row_idx, row in enumerate(table.rows):
                 for cell_idx, cell in enumerate(row.cells):
                     marker = f"CELL_{table_idx:02d}_{row_idx:02d}_{cell_idx:02d}"
                     self.element_markers.append(('table_cell', table_idx, row_idx, cell_idx, marker))
-                    cell_text = cell.text.strip()
+                    
+                    # Извлекаем текст из всех параграфов ячейки
+                    cell_text = ' '.join([p.text.strip() for p in cell.paragraphs if p.text.strip()])
                     text_parts.append(f"[{marker}] {cell_text}")
+            
+            table_end_marker = f"TABLE_END_{table_idx:02d}"
+            self.element_markers.append(('table_end', table_idx, table_end_marker))
+            text_parts.append(f"[{table_end_marker}]")
+            
             table_idx += 1
         
-        self.logger.info(f"Извлечено элементов: {len(text_parts)} (параграфов: {len(self.document.paragraphs)}, таблиц: {len(self.document.tables)})")
+        # 3. Извлекаем текст из колонтитулов (первой секции документа)
+        section = self.document.sections[0]
+        
+        # Обрабатываем верхние колонтитулы (headers)
+        header_types = [
+            (section.header, "HEADER"),
+            (section.first_page_header, "HEADER_FIRST"),
+            (section.even_page_header, "HEADER_EVEN")
+        ]
+        
+        for header, header_type in header_types:
+            if header is not None:
+                for i, paragraph in enumerate(header.paragraphs):
+                    marker = f"{header_type}_PARA_{i:04d}"
+                    self.element_markers.append(('header', header_type, i, marker))
+                    text_parts.append(f"[{marker}] {paragraph.text.strip()}")
+                
+                # Обрабатываем таблицы в колонтитулах
+                for table_idx, table in enumerate(header.tables):
+                    table_start_marker = f"{header_type}_TABLE_START_{table_idx:02d}"
+                    self.element_markers.append(('header_table_start', header_type, table_idx, table_start_marker))
+                    text_parts.append(f"[{table_start_marker}]")
+                    
+                    for row_idx, row in enumerate(table.rows):
+                        for cell_idx, cell in enumerate(row.cells):
+                            marker = f"{header_type}_CELL_{table_idx:02d}_{row_idx:02d}_{cell_idx:02d}"
+                            self.element_markers.append(('header_table_cell', header_type, table_idx, row_idx, cell_idx, marker))
+                            
+                            cell_text = ' '.join([p.text.strip() for p in cell.paragraphs if p.text.strip()])
+                            text_parts.append(f"[{marker}] {cell_text}")
+                    
+                    table_end_marker = f"{header_type}_TABLE_END_{table_idx:02d}"
+                    self.element_markers.append(('header_table_end', header_type, table_idx, table_end_marker))
+                    text_parts.append(f"[{table_end_marker}]")
+        
+        # Обрабатываем нижние колонтитулы (footers)
+        footer_types = [
+            (section.footer, "FOOTER"),
+            (section.first_page_footer, "FOOTER_FIRST"),
+            (section.even_page_footer, "FOOTER_EVEN")
+        ]
+        
+        for footer, footer_type in footer_types:
+            if footer is not None:
+                for i, paragraph in enumerate(footer.paragraphs):
+                    marker = f"{footer_type}_PARA_{i:04d}"
+                    self.element_markers.append(('footer', footer_type, i, marker))
+                    text_parts.append(f"[{marker}] {paragraph.text.strip()}")
+                
+                # Обрабатываем таблицы в колонтитулах
+                for table_idx, table in enumerate(footer.tables):
+                    table_start_marker = f"{footer_type}_TABLE_START_{table_idx:02d}"
+                    self.element_markers.append(('footer_table_start', footer_type, table_idx, table_start_marker))
+                    text_parts.append(f"[{table_start_marker}]")
+                    
+                    for row_idx, row in enumerate(table.rows):
+                        for cell_idx, cell in enumerate(row.cells):
+                            marker = f"{footer_type}_CELL_{table_idx:02d}_{row_idx:02d}_{cell_idx:02d}"
+                            self.element_markers.append(('footer_table_cell', footer_type, table_idx, row_idx, cell_idx, marker))
+                            
+                            cell_text = ' '.join([p.text.strip() for p in cell.paragraphs if p.text.strip()])
+                            text_parts.append(f"[{marker}] {cell_text}")
+                    
+                    table_end_marker = f"{footer_type}_TABLE_END_{table_idx:02d}"
+                    self.element_markers.append(('footer_table_end', footer_type, table_idx, table_end_marker))
+                    text_parts.append(f"[{table_end_marker}]")
+        
+        # Логируем информацию об извлеченных элементах
+        para_count = len(self.document.paragraphs)
+        table_count = len(self.document.tables)
+        element_count = len(text_parts)
+        
+        self.logger.info(f"Извлечено элементов: {element_count} (параграфов: {para_count}, таблиц: {table_count})")
+        
         return "\n".join(text_parts)
     
     
@@ -146,10 +233,16 @@ class WordProcessor:
             full_prompt = f"""
 {prompt}
 
-ТЕКСТ:
-{document_text}
+ВАЖНЕЙШИЕ ИНСТРУКЦИИ:
+1. Ты получишь текст документа, где каждая строка начинается с уникального маркера в квадратных скобках, например [PARA_0005] или [CELL_02_01_03].
+2. Ты ДОЛЖЕН сохранить ВСЕ эти маркеры в том же порядке и в том же месте в тексте. НЕ УДАЛЯЙ ИХ И НЕ ПЕРЕСТАВЛЯЙ.
+3. Маркеры — это служебная информация для программы, которая позволяет ей сохранить исходное форматирование документа (шрифты, таблицы, отступы). Без них документ будет испорчен.
+4. Внеси необходимые изменения в текст, который идет ПОСЛЕ маркера.
+5. Если тебе нужно добавить новый абзац или элемент, НЕ ДЕЛАЙ ЭТОГО. Работай строго в рамках предоставленных маркеров.
+6. Изменяй только текстовое содержимое. Не добавляй никаких комментариев, форматирования Markdown (вроде **жирный**) и не заключай ответ в ```.
 
-Верни тот же текст с изменениями. Сохрани форматирование, шрифты, выравнивания, отступы и т.д.
+ИСХОДНЫЙ ТЕКСТ С МАРКЕРАМИ:
+{document_text}
 """
             
             # Подготавливаем сообщения для LLM
@@ -183,47 +276,52 @@ class WordProcessor:
             return None
     
     def _apply_llm_changes(self, modified_text: str):
-        """Применяет изменения от LLM к документу с сохранением форматирования"""
+        """Применяет изменения от LLM к документу с сохранением форматирования, используя маркеры."""
         if not self.document:
             raise ValueError("Документ не загружен!")
 
-        print("🔧 Применяем изменения от LLM...")
+        print("🔧 Применяем изменения от LLM с помощью маркеров...")
         self.logger.info(f"Применяем изменения от LLM, длина текста: {len(modified_text)} символов")
 
-        # Убираем все маркеры из текста
-        clean_text = modified_text
+        # Создаем словарь: {маркер: новый_текст} для быстрого поиска
+        changes_map = {}
+        # Используем регулярное выражение для поиска маркеров и следующего за ними текста
         import re
-        # Убираем маркеры типа [PARA_0013], [TABLE_001_001_001] и т.д.
-        clean_text = re.sub(r'\[[^\]]+\]\s*', '', clean_text)
-        # Убираем маркеры кодовых блоков ```
-        clean_text = re.sub(r'```[^`]*```', '', clean_text)
-        clean_text = re.sub(r'```', '', clean_text)
-        
-        # Разбиваем на строки
-        modified_lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
-        self.logger.info(f"LLM вернул {len(modified_lines)} строк (маркеры удалены)")
+        # pattern ищет [MARKER] и захватывает весь текст до следующего маркера или конца строки
+        pattern = r'\[([A-Za-z_0-9]+)\]\s*(.*?)(?=\[[A-Za-z_0-9]+\]|$)'
+        matches = re.findall(pattern, modified_text, re.DOTALL)
 
-        # Просто заменяем текст в параграфах по порядку
+        for marker, new_content in matches:
+            new_content = new_content.strip()
+            if new_content:  # Игнорируем пустые совпадения
+                changes_map[marker] = new_content
+            else:
+                # Если контент пустой, возможно, модель его удалила. Явно запишем пустую строку.
+                changes_map[marker] = ""
+
+        self.logger.info(f"Найдено и замаплено {len(changes_map)} маркеров в ответе LLM")
+
+        # 1. Обновляем параграфы по маркерам
         paragraphs_updated = 0
-        for i, paragraph in enumerate(self.document.paragraphs):
-            if i < len(modified_lines) and paragraph.text.strip():
-                new_text = modified_lines[i]
-                self._update_paragraph_text(paragraph, new_text)
+        for elem_type, i, marker in [m for m in self.element_markers if m[0] == 'paragraph']:
+            if marker in changes_map:
+                new_text = changes_map[marker]
+                self._update_paragraph_text(self.document.paragraphs[i], new_text)
                 paragraphs_updated += 1
 
-        # Заменяем текст в таблицах
+        # 2. Обновляем ячейки таблиц по маркерам
         tables_updated = 0
-        for table in self.document.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    for paragraph in cell.paragraphs:
-                        if paragraph.text.strip() and paragraphs_updated + tables_updated < len(modified_lines):
-                            new_text = modified_lines[paragraphs_updated + tables_updated]
-                            self._update_paragraph_text(paragraph, new_text)
-                            tables_updated += 1
+        for elem_type, table_idx, row_idx, cell_idx, marker in [m for m in self.element_markers if m[0] == 'table_cell']:
+            if marker in changes_map:
+                new_text = changes_map[marker]
+                # Находим нужную ячейку и обновляем текст в ее первом параграфе (это упрощение, но работает для большинства случаев)
+                target_cell = self.document.tables[table_idx].cell(row_idx, cell_idx)
+                if target_cell.paragraphs:
+                    self._update_paragraph_text(target_cell.paragraphs[0], new_text)
+                tables_updated += 1
 
-        self.logger.info(f"Обновлено параграфов: {paragraphs_updated}, таблиц: {tables_updated}")
-        print("✅ Изменения от LLM применены")
+        self.logger.info(f"Обновлено по маркерам: параграфов: {paragraphs_updated}, ячеек таблиц: {tables_updated}")
+        print("✅ Изменения от LLM применены с помощью маркеров")
     
     def apply_changes(self, changes: Dict[str, str]) -> 'WordProcessor':
         """Применяет изменения к документу с сохранением форматирования"""
