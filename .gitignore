@@ -18,3 +18,6 @@ logs/
 docs
 new_docs
 logs
+
+.cursorignore
+.cursorrules

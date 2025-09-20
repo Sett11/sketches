@@ -31,11 +31,9 @@ class WordProcessor:
     
     def load_document(self, filepath: str) -> 'WordProcessor':
         """Загружает документ из файла"""
-        print(f"📖 Загружаем документ: {filepath}")
         self.logger.info(f"Загружаем документ: {filepath}")
         try:
             self.document = Document(filepath)
-            print("✅ Документ загружен успешно")
             self.logger.info(f"Документ загружен успешно: {filepath}")
         except Exception as e:
             self.logger.error(f"Ошибка при загрузке документа {filepath}: {e}")
@@ -61,7 +59,6 @@ class WordProcessor:
         if not os.path.exists(input_filepath):
             raise FileNotFoundError(f"Файл не найден: {input_filepath}")
         
-        print(f"📖 Обрабатываем документ: {input_filepath}")
         self.logger.info(f"Начинаем обработку документа: {input_filepath}")
         
         # Загружаем документ
@@ -73,19 +70,15 @@ class WordProcessor:
         
         # Отправляем в LLM
         if llm_client:
-            print("🤖 Отправляем текст в LLM...")
             self.logger.info("Отправляем текст в LLM")
             modified_text = self._process_with_llm(document_text, prompt, llm_client)
             if modified_text:
-                # Применяем изменения к документу
                 self.logger.info("Применяем изменения от LLM к документу")
                 self._apply_llm_changes(modified_text)
             else:
-                print("❌ LLM не вернул результат")
                 self.logger.error("LLM не вернул результат")
                 return None
         else:
-            print("❌ LLM клиент не предоставлен")
             self.logger.error("LLM клиент не предоставлен")
             return None
         
@@ -100,7 +93,6 @@ class WordProcessor:
         # Сохраняем обработанный документ
         self.save_document(output_path)
         
-        print(f"✅ Обработка завершена: {output_path}")
         self.logger.info(f"Обработка документа завершена успешно: {output_path}")
         return output_path
     
@@ -240,6 +232,7 @@ class WordProcessor:
 4. Внеси необходимые изменения в текст, который идет ПОСЛЕ маркера.
 5. Если тебе нужно добавить новый абзац или элемент, НЕ ДЕЛАЙ ЭТОГО. Работай строго в рамках предоставленных маркеров.
 6. Изменяй только текстовое содержимое. Не добавляй никаких комментариев, форматирования Markdown (вроде **жирный**) и не заключай ответ в ```.
+7. Применяй указанные инструкции КО ВСЕМУ СТРОКАМ ТЕКСТА. НЕ ИГНОРИРУЙ НИКАКИЕ СТРОКИ.
 
 ИСХОДНЫЙ ТЕКСТ С МАРКЕРАМИ:
 {document_text}
@@ -256,22 +249,16 @@ class WordProcessor:
                 modified_text = result[0]
                 self.logger.info(f"LLM вернул результат, длина: {len(modified_text)} символов")
                 
-                # Логируем первые несколько строк для отладки
+                # Логируем количество строк для отладки
                 lines = modified_text.split('\n')
                 self.logger.info(f"LLM вернул {len(lines)} строк")
-                for i, line in enumerate(lines[:5]):  # Показываем первые 5 строк
-                    self.logger.info(f"Строка {i+1}: '{line}'")
-                if len(lines) > 5:
-                    self.logger.info(f"... и еще {len(lines) - 5} строк")
                 
                 return modified_text
             else:
-                print("❌ LLM не вернул результат")
                 self.logger.error("LLM не вернул результат")
                 return None
                 
         except Exception as e:
-            print(f"❌ Ошибка при работе с LLM: {e}")
             self.logger.error(f"Ошибка при работе с LLM: {e}")
             return None
     
@@ -280,7 +267,6 @@ class WordProcessor:
         if not self.document:
             raise ValueError("Документ не загружен!")
 
-        print("🔧 Применяем изменения от LLM с помощью маркеров...")
         self.logger.info(f"Применяем изменения от LLM, длина текста: {len(modified_text)} символов")
 
         # Создаем словарь: {маркер: новый_текст} для быстрого поиска
@@ -320,15 +306,14 @@ class WordProcessor:
                     self._update_paragraph_text(target_cell.paragraphs[0], new_text)
                 tables_updated += 1
 
-        self.logger.info(f"Обновлено по маркерам: параграфов: {paragraphs_updated}, ячеек таблиц: {tables_updated}")
-        print("✅ Изменения от LLM применены с помощью маркеров")
+        self.logger.info(f"Изменения от LLM применены: параграфов: {paragraphs_updated}, ячеек таблиц: {tables_updated}")
     
     def apply_changes(self, changes: Dict[str, str]) -> 'WordProcessor':
         """Применяет изменения к документу с сохранением форматирования"""
         if not self.document:
             raise ValueError("Документ не загружен!")
         
-        print("🔧 Применяем изменения...")
+        self.logger.info("Применяем изменения")
         changes_made = 0
         
         # Изменяем параграфы
@@ -341,7 +326,7 @@ class WordProcessor:
                 for old_text, new_text_replacement in changes.items():
                     if old_text in new_text:
                         new_text = new_text.replace(old_text, new_text_replacement)
-                        print(f"  🔄 Заменяем: '{old_text}' -> '{new_text_replacement}'")
+                        self.logger.info(f"Заменяем: '{old_text}' -> '{new_text_replacement}'")
                         changes_made += 1
                 
                 # Обновляем текст с сохранением форматирования
@@ -361,14 +346,14 @@ class WordProcessor:
                             for old_text, new_text_replacement in changes.items():
                                 if old_text in new_text:
                                     new_text = new_text.replace(old_text, new_text_replacement)
-                                    print(f"  🔄 В таблице заменяем: '{old_text}' -> '{new_text_replacement}'")
+                                    self.logger.info(f"В таблице заменяем: '{old_text}' -> '{new_text_replacement}'")
                                     changes_made += 1
                             
                             # Обновляем текст
                             if new_text != original_text:
                                 self._update_paragraph_text(paragraph, new_text)
         
-        print(f"✅ Изменения применены: {changes_made} замен")
+        self.logger.info(f"Изменения применены: {changes_made} замен")
         return self
     
     def _update_paragraph_text(self, paragraph, new_text: str):
@@ -411,11 +396,9 @@ class WordProcessor:
         if not self.document:
             raise ValueError("Документ не загружен!")
         
-        print(f"💾 Сохраняем документ: {output_path}")
         self.logger.info(f"Сохраняем документ: {output_path}")
         try:
             self.document.save(output_path)
-            print("✅ Документ сохранен успешно")
             self.logger.info(f"Документ сохранен успешно: {output_path}")
         except Exception as e:
             self.logger.error(f"Ошибка при сохранении документа {output_path}: {e}")
@@ -427,78 +410,21 @@ class WordProcessor:
         if not self.document:
             raise ValueError("Документ не загружен!")
         
-        print("\n📋 Информация о документе:")
-        print("-" * 40)
+        self.logger.info("Информация о документе:")
+        self.logger.info("-" * 40)
         
         # Подсчитываем элементы
         paragraphs = [p for p in self.document.paragraphs if p.text.strip()]
         tables = self.document.tables
         
-        print(f"Параграфов: {len(paragraphs)}")
-        print(f"Таблиц: {len(tables)}")
+        self.logger.info(f"Параграфов: {len(paragraphs)}")
+        self.logger.info(f"Таблиц: {len(tables)}")
         
         # Показываем форматирование
-        print("\n🎨 Форматирование:")
-        for i, paragraph in enumerate(paragraphs[:5]):  # Показываем первые 5
-            print(f"\nПараграф {i+1}:")
-            print(f"  Текст: {paragraph.text[:50]}...")
-            print(f"  Выравнивание: {paragraph.alignment}")
-            
+        self.logger.info("Форматирование:")
+        for i, paragraph in enumerate(paragraphs[:3]):  # Показываем первые 3
+            self.logger.info(f"Параграф {i+1}: {paragraph.text[:50]}...")
             if paragraph.runs:
-                print("  Форматирование:")
-                for j, run in enumerate(paragraph.runs):
+                for j, run in enumerate(paragraph.runs[:2]):  # Показываем первые 2 runs
                     if run.text.strip():
-                        print(f"    Run {j+1}: жирный={run.bold}, курсив={run.italic}")
-
-def main():
-    """Демонстрация работы процессора с LLM"""
-    print("🔧 ПРОЦЕССОР WORD ДОКУМЕНТОВ С LLM")
-    print("=" * 50)
-    
-    # Создаем процессор
-    processor = WordProcessor()
-    
-    try:
-        # Проверяем наличие файлов в папке docs
-        docs_files = [f for f in os.listdir("docs") if f.endswith(('.docx', '.doc'))]
-        
-        if not docs_files:
-            print("📁 Папка docs пуста. Поместите .docx файлы в папку docs/ для обработки.")
-            print("💡 Пример использования:")
-            print("   from word_processor import WordProcessor")
-            print("   from llm import OpenRouterClient")
-            print("   processor = WordProcessor()")
-            print("   llm_client = OpenRouterClient()  # Использует API_KEY из env")
-            print("   result = processor.process_document('мой_файл.docx', 'промт для LLM', llm_client)")
-            return
-        
-        # Берем первый найденный файл для демонстрации
-        demo_file = docs_files[0]
-        print(f"📄 Найден файл для демонстрации: {demo_file}")
-        
-        # Пример промта для LLM
-        prompt = """
-Измени текст документа согласно следующим требованиям:
-1. Замени все упоминания "философия" на "философствование"
-2. Увеличь все цифры в тексте на 1.
-3. Сохрани структуру документа, форматирование, шрифты, выравнивания, отступы и т.д.
-Верни итоговый текст целиком.
-"""
-        
-        print("💡 Для полной работы с LLM необходимо:")
-        print("   1. Настроить API_KEY в переменных окружения")
-        print("   2. Создать экземпляр OpenRouterClient")
-        print("   3. Передать его в process_document()")
-        print("\n📝 Пример промта:")
-        print(prompt)
-        
-        # Демонстрация без LLM (только показываем структуру)
-        print(f"\n🔧 Структура вызова:")
-        print(f"   processor.process_document('{demo_file}', prompt, llm_client)")
-        
-    except Exception as e:
-        print(f"❌ Ошибка: {e}")
-        traceback.print_exc()
-
-if __name__ == "__main__":
-    main()
+                        self.logger.info(f"  Run {j+1}: жирный={run.bold}, курсив={run.italic}")
