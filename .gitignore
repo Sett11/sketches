@@ -1,9 +1,17 @@
 env
 .env
+*.rtf
 *.log
 *.py[cod]
 *.pyo
 __pycache__/
+*.json
+*.txt
+*.pdf
+*.docx
+*.doc
+*.xls
+*.xlsx
 
 # Cookie files with secrets
 parser/cookies.json
@@ -13,6 +21,7 @@ node_modules/
 
 venv
 docs/
+working_docs/
 new_docs/
 logs/
 docs
