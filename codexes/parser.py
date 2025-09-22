@@ -41,234 +41,119 @@ class Parser:
 
     def extract_structure(self, doc: Document) -> Dict[str, Any]:
         """Извлечение структуры документа из DOCX"""
-        self.logger.debug("Начало извлечения структуры из DOCX")
+        self.logger.debug("Начало извлечения структуры из DOCX (иерархический режим)")
         
         structure = {
             'document': '',
             'parts': []
         }
         
-        # Текущие элементы на каждом уровне
-        current_elements = {
-            'part': None,
-            'section': None,
-            'chapter': None,
-            'article': None,
-        }
-        
-        parts_found = 0
-        sections_found = 0
-        chapters_found = 0
-        articles_found = 0
-        paragraphs_found = 0
-        
-        # Обрабатываем каждый параграф
-        for i, paragraph in enumerate(doc.paragraphs):
-            text = paragraph.text.strip()
-            if not text:
-                continue
-            
-            self.logger.debug(f"Обрабатываю параграф {i+1}: {text[:100]}...")
-            
-            # Поиск частей (ищем явные заголовки "ЧАСТЬ")
-            if re.match(r'^ЧАСТЬ\s+([IVX]+|[А-ЯЁ]+|[0-9]+)', text, re.IGNORECASE):
-                parts_found += 1
-                self.logger.info(f"Найдена часть в параграфе {i+1}: {text}")
-                
-                # Сохраняем предыдущую часть, если есть
-                if current_elements['part']:
-                    structure['parts'].append(current_elements['part'])
-                
-                # Извлекаем номер части
-                part_number = self.extract_number_after_keyword(text, 'ЧАСТЬ')
-                part_title = text.replace(f'ЧАСТЬ {part_number}', '').strip()
-                current_elements['part'] = {
-                    'number': part_number,
-                    'title': self.clean_title(part_title),
-                    'sections': []
-                }
-                # Сбрасываем подуровни
-                current_elements['section'] = None
-                current_elements['chapter'] = None
-                current_elements['article'] = None
-            
-            # Поиск разделов
-            elif re.match(r'^Раздел\s+([IVX]+|[А-ЯЁ]+|[0-9]+)', text, re.IGNORECASE):
-                sections_found += 1
-                self.logger.info(f"Найден раздел в параграфе {i+1}: {text}")
-                
-                # Сохраняем предыдущий раздел, если есть
-                if current_elements['section'] and current_elements['part']:
-                    current_elements['part']['sections'].append(current_elements['section'])
-                
-                # Извлекаем номер раздела
-                section_number = self.extract_number_after_keyword(text, 'РАЗДЕЛ')
-                section_title = text.replace(f'Раздел {section_number}', '').strip()
-                current_elements['section'] = {
-                    'number': section_number,
-                    'title': self.clean_title(section_title),
-                    'chapters': []
-                }
-                # Сбрасываем подуровни
-                current_elements['chapter'] = None
-                current_elements['article'] = None
-            
-            # Поиск глав
-            elif re.match(r'^Глава\s+([0-9]+)', text, re.IGNORECASE):
-                chapters_found += 1
-                self.logger.info(f"Найдена глава в параграфе {i+1}: {text}")
-                
-                # Сохраняем предыдущую главу, если есть
-                if current_elements['chapter'] and current_elements['section']:
-                    current_elements['section']['chapters'].append(current_elements['chapter'])
-                
-                # Извлекаем номер главы
-                chapter_number = self.extract_number_after_keyword(text, 'ГЛАВА')
-                chapter_title = text.replace(f'Глава {chapter_number}', '').strip()
-                current_elements['chapter'] = {
-                    'number': int(chapter_number) if chapter_number.isdigit() else 0,
-                    'title': self.clean_title(chapter_title),
-                    'articles': []
-                }
-                # Сбрасываем подуровни
-                current_elements['article'] = None
-            
-            # Поиск статей
-            elif re.match(r'^Статья\s+([0-9]+)', text, re.IGNORECASE):
-                articles_found += 1
-                self.logger.info(f"Найдена статья в параграфе {i+1}: {text}")
-                
-                # Сохраняем предыдущую статью, если есть
-                if current_elements['article'] and current_elements['chapter']:
-                    current_elements['chapter']['articles'].append(current_elements['article'])
-                
-                # Извлекаем номер статьи
-                article_number = self.extract_number_after_keyword(text, 'СТАТЬЯ')
-                article_title = text.replace(f'Статья {article_number}', '').strip()
-                current_elements['article'] = {
-                    'number': int(article_number) if article_number.isdigit() else 0,
-                    'title': self.clean_title(article_title),
-                    'paragraphs': []
-                }
-            
-            # Поиск пунктов (включая подпункты)
-            elif current_elements['article'] and self.is_paragraph(text):
-                paragraphs_found += 1
-                self.logger.info(f"Найден пункт в параграфе {i+1}: {text}")
-                
-                # Извлекаем структуру пункта
-                paragraph_data = self.extract_paragraph_structure(text)
-                if paragraph_data:
-                    current_elements['article']['paragraphs'].append(paragraph_data)
-        
-        # Сохраняем последние элементы
-        if current_elements['article'] and current_elements['chapter']:
-            current_elements['chapter']['articles'].append(current_elements['article'])
-        if current_elements['chapter'] and current_elements['section']:
-            current_elements['section']['chapters'].append(current_elements['chapter'])
-        if current_elements['section'] and current_elements['part']:
-            current_elements['part']['sections'].append(current_elements['section'])
-        if current_elements['part']:
-            structure['parts'].append(current_elements['part'])
-        
-        # Если нет частей, но есть разделы, создаем общую часть
-        if not structure['parts'] and sections_found > 0:
-            self.logger.info("Части не найдены, но есть разделы. Создаю общую часть.")
-            
-            # Создаем основную часть
-            main_part = {
+        # Новый основной алгоритм: иерархический split
+        full_text = self.get_full_text(doc)
+        self.logger.debug(f"Длина полного текста: {len(full_text)}")
+
+        parts = self.split_level(full_text, level='part')
+        self.logger.info(f"Найдено частей: {len(parts)}")
+        if not parts:
+            parts = [{
                 'number': '1',
                 'title': 'Основная часть',
+                'body': full_text
+            }]
+
+        for p_idx, part in enumerate(parts, 1):
+            part_obj = {
+                'number': part['number'],
+                'title': self.clean_title(part['title']),
                 'sections': []
             }
             
-            # Пересобираем структуру без частей
-            current_section = None
-            current_chapter = None
-            current_article = None
-            
-            for i, paragraph in enumerate(doc.paragraphs):
-                text = paragraph.text.strip()
-                if not text:
-                    continue
-                
-                # Поиск разделов
-                if re.match(r'^Раздел\s+([IVX]+|[А-ЯЁ]+|[0-9]+)', text, re.IGNORECASE):
-                    # Сохраняем предыдущий раздел
-                    if current_section:
-                        main_part['sections'].append(current_section)
-                    
-                    section_number = self.extract_number_after_keyword(text, 'РАЗДЕЛ')
-                    section_title = text.replace(f'Раздел {section_number}', '').strip()
-                    current_section = {
-                        'number': section_number,
-                        'title': self.clean_title(section_title),
+            sections = self.split_level(part['body'], level='section')
+            if not sections:
+                sections = [{
+                    'number': '1',
+                    'title': 'Общий раздел',
+                    'body': part['body']
+                }]
+
+            for s_idx, section in enumerate(sections, 1):
+                section_obj = {
+                    'number': section['number'],
+                    'title': self.clean_title(section['title']),
                         'chapters': []
                     }
-                    current_chapter = None
-                    current_article = None
-                
-                # Поиск глав
-                elif re.match(r'^Глава\s+([0-9]+)', text, re.IGNORECASE):
-                    # Сохраняем предыдущую главу
-                    if current_chapter and current_section:
-                        current_section['chapters'].append(current_chapter)
-                    
-                    chapter_number = self.extract_number_after_keyword(text, 'ГЛАВА')
-                    chapter_title = text.replace(f'Глава {chapter_number}', '').strip()
-                    current_chapter = {
-                        'number': int(chapter_number) if chapter_number.isdigit() else 0,
-                        'title': self.clean_title(chapter_title),
+
+                chapters = self.split_level(section['body'], level='chapter')
+                if not chapters:
+                    chapters = [{
+                        'number': '1',
+                        'title': 'Общая глава',
+                        'body': section['body']
+                    }]
+
+                for c_idx, chapter in enumerate(chapters, 1):
+                    chapter_number = self.normalize_chapter_article_number(chapter['number'])
+                    chapter_obj = {
+                        'number': chapter_number,
+                        'title': self.clean_title(chapter['title']),
                         'articles': []
                     }
-                    current_article = None
-                
-                # Поиск статей
-                elif re.match(r'^Статья\s+([0-9]+)', text, re.IGNORECASE):
-                    # Сохраняем предыдущую статью
-                    if current_article and current_chapter:
-                        current_chapter['articles'].append(current_article)
-                    
-                    article_number = self.extract_number_after_keyword(text, 'СТАТЬЯ')
-                    article_title = text.replace(f'Статья {article_number}', '').strip()
-                    current_article = {
-                        'number': int(article_number) if article_number.isdigit() else 0,
-                        'title': self.clean_title(article_title),
+
+                    articles = self.split_level(chapter['body'], level='article')
+
+                    for a_idx, article in enumerate(articles, 1):
+                        article_number = self.normalize_chapter_article_number(article['number'])
+                        article_obj = {
+                            'number': article_number,
+                            'title': self.clean_title(article['title']),
+                            'notes': [],
+                            'intro': '',
                         'paragraphs': []
                     }
                 
-                # Поиск пунктов (включая подпункты)
-                elif current_article and self.is_paragraph(text):
-                    paragraph_data = self.extract_paragraph_structure(text)
-                    if paragraph_data:
-                        current_article['paragraphs'].append(paragraph_data)
-            
-            # Сохраняем последние элементы
-            if current_article and current_chapter:
-                current_chapter['articles'].append(current_article)
-            if current_chapter and current_section:
-                current_section['chapters'].append(current_chapter)
-            if current_section:
-                main_part['sections'].append(current_section)
-            
-            structure['parts'].append(main_part)
-        
-        # Итоговое логирование
-        parts_count = len(structure['parts'])
-        self.logger.info(f"Извлечение структуры завершено. Создано частей: {parts_count}")
-        
+                        intro_lines: List[str] = []
+                        started_numbered = False
+                        for line in article['body'].split('\n'):
+                            text_line = line.strip()
+                            if not text_line:
+                                continue
+                            # собираем примечания в отдельный массив
+                            if re.match(r'^\s*Примечан[ие][\w\W]*', text_line, flags=re.IGNORECASE):
+                                article_obj['notes'].append(text_line)
+                                continue
+                            if not started_numbered and not self.is_paragraph(text_line):
+                                intro_lines.append(text_line)
+                                continue
+                            if self.is_paragraph(text_line):
+                                started_numbered = True
+                                paragraph_data = self.extract_paragraph_structure(text_line)
+                                if paragraph_data:
+                                    article_obj['paragraphs'].append(paragraph_data)
+                        if intro_lines:
+                            article_obj['intro'] = "\n".join(intro_lines)
+
+                        chapter_obj['articles'].append(article_obj)
+
+                    section_obj['chapters'].append(chapter_obj)
+
+                part_obj['sections'].append(section_obj)
+
+            structure['parts'].append(part_obj)
+
+        self.logger.info("Иерархическое извлечение структуры завершено")
         return structure
 
     def is_paragraph(self, text: str) -> bool:
         """Проверка, является ли текст пунктом или подпунктом"""
-        # Ищем паттерны: 1., 1.1., 1.2., 2., 2.1., 2.2. и т.д.
         patterns = [
-            r'^(\d+)\.\s',  # 1., 2., 3.
-            r'^(\d+)\.(\d+)\.\s',  # 1.1., 1.2., 2.1.
-            r'^(\d+)\)\s',  # 1), 2), 3)
-            r'^(\d+)\.(\d+)\)\s',  # 1.1), 1.2), 2.1)
+            r'^(\d+)\.\s',              # 1. ...
+            r'^(?:\d+\.){2,}\s',        # 1.2.3. ...
+            r'^(\d+)\.(\d+)\.\s',     # 1.1. ...
+            r'^(\d+)\)\s',              # 1) ...
+            r'^(\d+(?:\.\d+)+)\)\s',  # 1.1) ...
+            r'^([A-Za-zА-Яа-яЁё])\)\s',  # a) б) ...
+            r'^[\-—•]\s',                # -, —, • ...
         ]
-        
         for pattern in patterns:
             if re.match(pattern, text):
                 return True
@@ -276,55 +161,103 @@ class Parser:
 
     def extract_paragraph_structure(self, text: str) -> Dict[str, Any]:
         """Извлечение структуры пункта (включая подпункты)"""
-        # Ищем основной пункт (1., 2., 3.)
-        main_match = re.match(r'^(\d+)\.\s*(.+)', text)
-        if main_match:
-            paragraph_number = main_match.group(1) + '.'
-            paragraph_text = main_match.group(2).strip()
-            
+        m = re.match(r'^(?P<num>(?:\d+\.){1,}\d*|\d+(?:\.\d+)+|\d+\)|[A-Za-zА-Яа-яЁё]\)|[\-—•])\s+(?P<text>.+)', text)
+        if m:
             return {
-                'number': paragraph_number,
-                'text': paragraph_text,
+                'number': m.group('num'),
+                'text': m.group('text').strip(),
                 'subparagraphs': []
             }
-        
-        # Ищем подпункт (1.1., 1.2., 2.1.)
-        sub_match = re.match(r'^(\d+)\.(\d+)\.\s*(.+)', text)
-        if sub_match:
-            sub_number = sub_match.group(1) + '.' + sub_match.group(2) + '.'
-            sub_text = sub_match.group(3).strip()
-            
-            return {
-                'number': sub_number,
-                'text': sub_text,
-                'subparagraphs': []
-            }
-        
-        # Ищем пункт со скобками (1), 2), 3))
-        bracket_match = re.match(r'^(\d+)\)\s*(.+)', text)
-        if bracket_match:
-            bracket_number = bracket_match.group(1) + ')'
-            bracket_text = bracket_match.group(2).strip()
-            
-            return {
-                'number': bracket_number,
-                'text': bracket_text,
-                'subparagraphs': []
-            }
-        
-        # Ищем подпункт со скобками (1.1), 1.2), 2.1))
-        bracket_sub_match = re.match(r'^(\d+)\.(\d+)\)\s*(.+)', text)
-        if bracket_sub_match:
-            bracket_sub_number = bracket_sub_match.group(1) + '.' + bracket_sub_match.group(2) + ')'
-            bracket_sub_text = bracket_sub_match.group(3).strip()
-            
-            return {
-                'number': bracket_sub_number,
-                'text': bracket_sub_text,
-                'subparagraphs': []
-            }
-        
         return None
+
+    def get_full_text(self, doc: Document) -> str:
+        """Собирает текст документа, объединяя непустые параграфы построчно."""
+        lines: List[str] = []
+        for p in doc.paragraphs:
+            t = (p.text or '').strip()
+            if t:
+                lines.append(t)
+        text = "\n".join(lines)
+        text = re.sub(r"\r\n?", "\n", text)
+        # Убираем лишние пробелы в начале/конце строк
+        text = "\n".join(s.strip() for s in text.split("\n"))
+        return text
+
+    def split_level(self, text: str, level: str) -> List[Dict[str, Any]]:
+        """Разделяет текст по заголовкам уровня (part/section/chapter/article) и возвращает список блоков."""
+        patterns = {
+            # Разрешаем ведущие пробелы и точку после номера; расширяем главы римскими цифрами
+            'part':    r'(?m)^\s*(?P<kw>ЧАСТЬ)\s+(?P<num>[IVXLC]+|[А-ЯЁ]+|[0-9]+)\.?\s*(?P<title>.*)$',
+            'section': r'(?m)^\s*(?P<kw>Раздел)\s+(?P<num>[IVXLC]+|[А-ЯЁ]+|[0-9]+)\.?\s*(?P<title>.*)$',
+            'chapter': r'(?m)^\s*(?P<kw>Глава)\s+(?P<num>[IVXLC]+|[0-9]+)\.?\s*(?P<title>.*)$',
+            # Для статей допускаем перенос между словом и номером
+            'article': r'(?m)^\s*(?P<kw>Статья)\s*(?:\n\s*)?(?P<num>[0-9]+)\.?\s*(?P<title>.*)$',
+        }
+        if level not in patterns:
+            return []
+        regex = re.compile(patterns[level], re.IGNORECASE)
+        matches = list(regex.finditer(text))
+        if not matches:
+            return []
+
+        items: List[Dict[str, Any]] = []
+        for idx, m in enumerate(matches):
+            end_heading = m.end()
+            next_start = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
+            body = text[end_heading:next_start]
+            title_raw = (m.group('title') or '').strip()
+            # если "заголовок" фактически начинается с маркера пункта — считаем его пустым
+            if title_raw and self.is_paragraph(title_raw):
+                title_raw = ''
+            # Если после ключевого слова пусто/только пунктуация — взять следующую строку как заголовок
+            if not title_raw or re.fullmatch(r'[.·•—\-]*', title_raw):
+                title_raw = self.peek_next_nonempty_line(text, end_heading, avoid_paragraphs=True, avoid_headings=True)
+            item = {
+                'number': (m.group('num') or '').strip(),
+                'title': self.clean_title(title_raw or ''),
+                'body': body
+            }
+            if self.is_amendment_or_note(item['title']):
+                self.logger.debug(f"Отфильтрован заголовок {level}: {item['title']}")
+                continue
+            items.append(item)
+        return items
+
+    def peek_next_nonempty_line(self, text: str, pos: int, avoid_paragraphs: bool = False, avoid_headings: bool = False) -> str:
+        tail = text[pos:]
+        for line in tail.split('\n'):
+            s = line.strip()
+            if s:
+                if avoid_paragraphs and self.is_paragraph(s):
+                    continue
+                if avoid_headings and self.is_heading_line(s):
+                    continue
+                return s
+        return ''
+
+    def is_heading_line(self, text: str) -> bool:
+        return bool(re.match(r'^(ЧАСТЬ|Раздел|Глава|Статья)\b', text, re.IGNORECASE))
+
+    def normalize_chapter_article_number(self, value: Any) -> int:
+        try:
+            if isinstance(value, int):
+                return value
+            s = str(value).strip()
+            return int(s) if s.isdigit() else 0
+        except Exception:
+            return 0
+
+    def is_amendment_or_note(self, text: str) -> bool:
+        if not text:
+            return False
+        patterns = [
+            r'в ред\.',
+            r'федерального закона',
+            r'постановлени[ея]',
+            r'конституционного суда',
+            r'примечани[ея]'
+        ]
+        return any(re.search(p, text, re.IGNORECASE) for p in patterns)
 
     def extract_number_after_keyword(self, text: str, keyword: str) -> str:
         """Извлечение номера после ключевого слова"""
