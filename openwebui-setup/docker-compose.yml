@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      - "${OPENWEBUI_PORT:-3000}:8080"
+    environment:
+      - OPENAI_API_KEY=0p3n-w3bu!
+      - OPENAI_API_BASE=http://pipelines:9099
+      - ENABLE_OPENAI_API=true
+      - ENABLE_OLLAMA_API=false
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-secret-key}
+    volumes:
+      - openwebui_data:/app/backend/data
+      - ./logs:/app/logs
+    networks:
+      - webui-network
+    restart: unless-stopped
+    depends_on:
+      - pipelines
+      - mcpo
+      - jur-mcpo
+
+  pipelines:
+    image: ghcr.io/open-webui/pipelines:main
+    container_name: pipelines
+    ports:
+      - "${PIPELINES_PORT:-9099}:9099"
+    volumes:
+      - pipelines_data:/app/pipelines
+      - ./pipelines:/app/custom_pipelines:ro
+      - ./logs:/app/logs
+    networks:
+      - webui-network
+    restart: unless-stopped
+    environment:
+      - PIPELINES_AUTO_LOAD_DIR=/app/custom_pipelines
+      - PIPELINES_API_KEY=0p3n-w3bu!
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+      - DB_URL=${DB_URL}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+
+  mcpo:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcpo
+    container_name: mcpo
+    ports:
+      - "${MCPO_PORT:-8000}:8000"
+    volumes:
+      - ./mcpo_servers:/app/mcpo_servers:ro
+      - ./logs:/app/logs
+    networks:
+      - webui-network
+    restart: unless-stopped
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - MCPO_API_KEY=${MCPO_API_KEY:-mcpo-secret}
+
+  jur-mcpo:
+    build:
+      context: .
+      dockerfile: Dockerfile.jur-mcpo
+    container_name: jur-mcpo
+    ports:
+      - "${JUR_MCPO_PORT:-8001}:8001"
+    volumes:
+      - ./mcpo_servers:/app/mcpo_servers:ro
+      - ./logs:/app/logs
+    networks:
+      - webui-network
+    restart: unless-stopped
+    environment:
+      - MCPO_API_KEY=${MCPO_API_KEY:-mcpo-secret}
+      - DB_URL=${DB_URL}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+
+
+volumes:
+  openwebui_data:
+  pipelines_data:
+
+networks:
+  webui-network:
+    driver: bridge

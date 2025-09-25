@@ -1,0 +1,39 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Установка uv
+RUN pip install uv
+
+# Клонирование и установка MCPO
+RUN git clone https://github.com/open-webui/mcpo.git /app/mcpo
+
+WORKDIR /app/mcpo
+
+# Установка зависимостей MCPO
+RUN uv sync
+
+# Копирование MCP сервера
+COPY mcpo_servers /app/mcpo_servers
+
+# Копирование и установка зависимостей проекта
+COPY requirements.txt /app/requirements.txt
+RUN uv pip install -r /app/requirements.txt
+
+# Создание директории для логов
+RUN mkdir -p /app/logs
+
+# Установка переменных окружения
+ENV PYTHONPATH=/app/mcpo_servers
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8001
+
+# Запуск MCPO с юридическим MCP сервером
+CMD ["sh", "-c", "uv run mcpo --port 8001 --api-key ${MCPO_API_KEY:-mcpo-secret} -- python /app/mcpo_servers/mcp.py"]

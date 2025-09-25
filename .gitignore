@@ -12,6 +12,8 @@ __pycache__/
 *.doc
 *.xls
 *.xlsx
+*.ipynb
+*.md
 
 # Cookie files with secrets
 parser/cookies.json
