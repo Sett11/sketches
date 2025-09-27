@@ -1,28 +1,117 @@
 #!/usr/bin/env python3
 """
-Простой процессор Word документов на python-docx
-Тестирует сохранение форматирования при изменении содержимого
+Единый Pipeline для трансформации Word документов с помощью LLM
+Содержит всю логику: OpenRouterClient, WordProcessor, DocumentTransformPipeline
 """
 
 import os
-import traceback
+import re
+from typing import Dict, List, Any, Optional
 from datetime import datetime
-from typing import Dict, List
-from dotenv import load_dotenv
-
+import requests
 from docx import Document
-from docx.shared import Inches, Pt
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT
+import time
 
+# Импортируем наш логгер
+import sys
+# Добавляем родительскую директорию в путь для импорта
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
 from mylogger import Logger
-from llm import OpenRouterClient
 
-# Загружаем переменные окружения из .env файла
-load_dotenv()
+# Настройка логирования
+logger = Logger('DOCUMENT_TRANSFORM', 'logs/document_transform.log')
+
+class OpenRouterClient:
+    """Клиент для работы с OpenRouter API"""
+    
+    def __init__(self, model_name: str = None, api_key: str = None, site_url: str = None, site_name: str = None):
+        # Получаем значения из переменных окружения
+        self.api_key = api_key or os.getenv('OPENROUTER_API_KEY')
+        self.model_name = model_name or os.getenv('MODEL_NAME', 'google/gemma-3-27b-it:free')
+        self.site_url = site_url or os.getenv('SITE_URL', '')
+        self.site_name = site_name or os.getenv('SITE_NAME', '')
+        
+        if not self.api_key:
+            raise ValueError("OPENROUTER_API_KEY не найден в переменных окружения")
+        
+        self.base_url = "https://openrouter.ai/api/v1/chat/completions"
+        logger.info(f"OpenRouterClient инициализирован: model={self.model_name}")
+
+    def generate(self, messages: list, max_retries: int = 3, delay: int = 600, 
+                 temperature: float = 0.3, max_tokens: int = 2048, idop: int = 0):
+        """Вызывает OpenRouter API с обработкой исключений"""
+        retries = 0
+        
+        while retries < max_retries:
+            try:
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                if self.site_url:
+                    headers["Referer"] = self.site_url
+                if self.site_name:
+                    headers["X-Title"] = self.site_name
+                
+                data = {
+                    "model": self.model_name,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens
+                }
+                
+                response = requests.post(self.base_url, headers=headers, json=data)
+                response.raise_for_status()
+                
+                result = response.json()
+                
+                if 'choices' in result and len(result['choices']) > 0:
+                    content = result['choices'][0]['message']['content']
+                    usage = result.get('usage', {})
+                    prompt_tokens = usage.get('prompt_tokens', 0)
+                    completion_tokens = usage.get('completion_tokens', 0)
+                    
+                    if idop != 0:
+                        logger.info(f"LLM call - idop: {idop}, model: {self.model_name}, prompt_tokens: {int(prompt_tokens)}, completion_tokens: {int(completion_tokens)}")
+                    else:
+                        logger.info("Call with NULL idop")
+                    
+                    return (content, prompt_tokens, completion_tokens)
+                else:
+                    logger.error("No choices in OpenRouter response")
+                    return None
+            
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Request Error: {e}")
+                if retries < max_retries - 1:
+                    logger.info(f"Retrying in {delay} seconds...")
+                    retries += 1
+                    time.sleep(delay)
+                else:
+                    return None
+            
+            except Exception as e:
+                logger.error(f"Unexpected Error: {e}")
+                return None
+        
+        logger.error("Max retries reached. Failed to get response.")
+        return None
+
+    @staticmethod
+    def prepare_messages(prompt: str, system_message: str = "") -> list:
+        """Формирует список сообщений для OpenRouter API"""
+        messages = []
+        if system_message:
+            messages.append({"role": "system", "content": system_message})
+        messages.append({"role": "user", "content": prompt})
+        return messages
+
 
 class WordProcessor:
-    """Простой процессор Word документов с сохранением форматирования"""
+    """Процессор Word документов с сохранением форматирования"""
     
     def __init__(self):
         self.document = None
@@ -41,21 +130,7 @@ class WordProcessor:
         return self
     
     def process_document(self, input_filepath: str, prompt: str, llm_client=None) -> str:
-        """
-        Обрабатывает документ с помощью LLM: читает, отправляет в модель и сохраняет результат
-        
-        Args:
-            input_filepath: Путь к исходному файлу (относительно docs/)
-            prompt: Промт для LLM модели
-            llm_client: Клиент LLM (OpenAIClient)
-        
-        Returns:
-            Путь к обработанному файлу
-        """
-        # Формируем полный путь к исходному файлу
-        if not input_filepath.startswith('docs/'):
-            input_filepath = f"docs/{input_filepath}"
-        
+        """Обрабатывает документ с помощью LLM"""
         if not os.path.exists(input_filepath):
             raise FileNotFoundError(f"Файл не найден: {input_filepath}")
         
@@ -82,11 +157,12 @@ class WordProcessor:
             self.logger.error("LLM клиент не предоставлен")
             return None
         
-        # Генерируем имя выходного файла: "new_" + старое имя
+        # Генерируем имя выходного файла
         base_name = os.path.basename(input_filepath)
-        output_filename = f"new_{base_name}"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_filename = f"transformed_{timestamp}_{base_name}"
         
-        # Убеждаемся, что папка new_docs существует
+        # Создаем папку new_docs если не существует
         os.makedirs("new_docs", exist_ok=True)
         output_path = f"new_docs/{output_filename}"
         
@@ -106,26 +182,22 @@ class WordProcessor:
         
         # 1. Извлекаем текст из параграфов основного содержимого
         for i, paragraph in enumerate(self.document.paragraphs):
-            # Сохраняем даже пустые параграфы, так как они могут содержать форматирование
             marker = f"PARA_{i:04d}"
             self.element_markers.append(('paragraph', i, marker))
             text_parts.append(f"[{marker}] {paragraph.text.strip()}")
         
-        # 2. Извлекаем текст из таблиц с улучшенной структурой
+        # 2. Извлекаем текст из таблиц
         table_idx = 0
         for table in self.document.tables:
-            # Добавляем маркеры начала и конца таблицы для контекста
             table_start_marker = f"TABLE_START_{table_idx:02d}"
             self.element_markers.append(('table_start', table_idx, table_start_marker))
             text_parts.append(f"[{table_start_marker}]")
             
-            # Обрабатываем каждую ячейку таблицы
             for row_idx, row in enumerate(table.rows):
                 for cell_idx, cell in enumerate(row.cells):
                     marker = f"CELL_{table_idx:02d}_{row_idx:02d}_{cell_idx:02d}"
                     self.element_markers.append(('table_cell', table_idx, row_idx, cell_idx, marker))
                     
-                    # Извлекаем текст из всех параграфов ячейки
                     cell_text = ' '.join([p.text.strip() for p in cell.paragraphs if p.text.strip()])
                     text_parts.append(f"[{marker}] {cell_text}")
             
@@ -134,73 +206,6 @@ class WordProcessor:
             text_parts.append(f"[{table_end_marker}]")
             
             table_idx += 1
-        
-        # 3. Извлекаем текст из колонтитулов (первой секции документа)
-        section = self.document.sections[0]
-        
-        # Обрабатываем верхние колонтитулы (headers)
-        header_types = [
-            (section.header, "HEADER"),
-            (section.first_page_header, "HEADER_FIRST"),
-            (section.even_page_header, "HEADER_EVEN")
-        ]
-        
-        for header, header_type in header_types:
-            if header is not None:
-                for i, paragraph in enumerate(header.paragraphs):
-                    marker = f"{header_type}_PARA_{i:04d}"
-                    self.element_markers.append(('header', header_type, i, marker))
-                    text_parts.append(f"[{marker}] {paragraph.text.strip()}")
-                
-                # Обрабатываем таблицы в колонтитулах
-                for table_idx, table in enumerate(header.tables):
-                    table_start_marker = f"{header_type}_TABLE_START_{table_idx:02d}"
-                    self.element_markers.append(('header_table_start', header_type, table_idx, table_start_marker))
-                    text_parts.append(f"[{table_start_marker}]")
-                    
-                    for row_idx, row in enumerate(table.rows):
-                        for cell_idx, cell in enumerate(row.cells):
-                            marker = f"{header_type}_CELL_{table_idx:02d}_{row_idx:02d}_{cell_idx:02d}"
-                            self.element_markers.append(('header_table_cell', header_type, table_idx, row_idx, cell_idx, marker))
-                            
-                            cell_text = ' '.join([p.text.strip() for p in cell.paragraphs if p.text.strip()])
-                            text_parts.append(f"[{marker}] {cell_text}")
-                    
-                    table_end_marker = f"{header_type}_TABLE_END_{table_idx:02d}"
-                    self.element_markers.append(('header_table_end', header_type, table_idx, table_end_marker))
-                    text_parts.append(f"[{table_end_marker}]")
-        
-        # Обрабатываем нижние колонтитулы (footers)
-        footer_types = [
-            (section.footer, "FOOTER"),
-            (section.first_page_footer, "FOOTER_FIRST"),
-            (section.even_page_footer, "FOOTER_EVEN")
-        ]
-        
-        for footer, footer_type in footer_types:
-            if footer is not None:
-                for i, paragraph in enumerate(footer.paragraphs):
-                    marker = f"{footer_type}_PARA_{i:04d}"
-                    self.element_markers.append(('footer', footer_type, i, marker))
-                    text_parts.append(f"[{marker}] {paragraph.text.strip()}")
-                
-                # Обрабатываем таблицы в колонтитулах
-                for table_idx, table in enumerate(footer.tables):
-                    table_start_marker = f"{footer_type}_TABLE_START_{table_idx:02d}"
-                    self.element_markers.append(('footer_table_start', footer_type, table_idx, table_start_marker))
-                    text_parts.append(f"[{table_start_marker}]")
-                    
-                    for row_idx, row in enumerate(table.rows):
-                        for cell_idx, cell in enumerate(row.cells):
-                            marker = f"{footer_type}_CELL_{table_idx:02d}_{row_idx:02d}_{cell_idx:02d}"
-                            self.element_markers.append(('footer_table_cell', footer_type, table_idx, row_idx, cell_idx, marker))
-                            
-                            cell_text = ' '.join([p.text.strip() for p in cell.paragraphs if p.text.strip()])
-                            text_parts.append(f"[{marker}] {cell_text}")
-                    
-                    table_end_marker = f"{footer_type}_TABLE_END_{table_idx:02d}"
-                    self.element_markers.append(('footer_table_end', footer_type, table_idx, table_end_marker))
-                    text_parts.append(f"[{table_end_marker}]")
         
         # Логируем информацию об извлеченных элементах
         para_count = len(self.document.paragraphs)
@@ -211,15 +216,10 @@ class WordProcessor:
         
         return "\n".join(text_parts)
     
-    
     def _process_with_llm(self, document_text: str, prompt: str, llm_client) -> str:
         """Отправляет текст в LLM и получает измененный результат"""
         try:
             self.logger.info("Начинаем обработку текста в LLM")
-            
-            # Подсчитываем количество строк в оригинальном тексте
-            original_lines = document_text.split('\n')
-            line_count = len(original_lines)
             
             # Формируем полный промт
             full_prompt = f"""
@@ -250,7 +250,6 @@ class WordProcessor:
                 modified_text = result[0]
                 self.logger.info(f"LLM вернул результат, длина: {len(modified_text)} символов")
                 
-                # Логируем количество строк для отладки
                 lines = modified_text.split('\n')
                 self.logger.info(f"LLM вернул {len(lines)} строк")
                 
@@ -264,7 +263,7 @@ class WordProcessor:
             return None
     
     def _apply_llm_changes(self, modified_text: str):
-        """Применяет изменения от LLM к документу с сохранением форматирования, используя маркеры."""
+        """Применяет изменения от LLM к документу с сохранением форматирования"""
         if not self.document:
             raise ValueError("Документ не загружен!")
 
@@ -272,23 +271,19 @@ class WordProcessor:
 
         # Создаем словарь: {маркер: новый_текст} для быстрого поиска
         changes_map = {}
-        # Используем регулярное выражение для поиска маркеров и следующего за ними текста
-        import re
-        # pattern ищет [MARKER] и захватывает весь текст до следующего маркера или конца строки
         pattern = r'\[([A-Za-z_0-9]+)\]\s*(.*?)(?=\[[A-Za-z_0-9]+\]|$)'
         matches = re.findall(pattern, modified_text, re.DOTALL)
 
         for marker, new_content in matches:
             new_content = new_content.strip()
-            if new_content:  # Игнорируем пустые совпадения
+            if new_content:
                 changes_map[marker] = new_content
             else:
-                # Если контент пустой, возможно, модель его удалила. Явно запишем пустую строку.
                 changes_map[marker] = ""
 
         self.logger.info(f"Найдено и замаплено {len(changes_map)} маркеров в ответе LLM")
 
-        # 1. Обновляем параграфы по маркерам
+        # Обновляем параграфы по маркерам
         paragraphs_updated = 0
         for elem_type, i, marker in [m for m in self.element_markers if m[0] == 'paragraph']:
             if marker in changes_map:
@@ -296,66 +291,17 @@ class WordProcessor:
                 self._update_paragraph_text(self.document.paragraphs[i], new_text)
                 paragraphs_updated += 1
 
-        # 2. Обновляем ячейки таблиц по маркерам
+        # Обновляем ячейки таблиц по маркерам
         tables_updated = 0
         for elem_type, table_idx, row_idx, cell_idx, marker in [m for m in self.element_markers if m[0] == 'table_cell']:
             if marker in changes_map:
                 new_text = changes_map[marker]
-                # Находим нужную ячейку и обновляем текст в ее первом параграфе (это упрощение, но работает для большинства случаев)
                 target_cell = self.document.tables[table_idx].cell(row_idx, cell_idx)
                 if target_cell.paragraphs:
                     self._update_paragraph_text(target_cell.paragraphs[0], new_text)
                 tables_updated += 1
 
         self.logger.info(f"Изменения от LLM применены: параграфов: {paragraphs_updated}, ячеек таблиц: {tables_updated}")
-    
-    def apply_changes(self, changes: Dict[str, str]) -> 'WordProcessor':
-        """Применяет изменения к документу с сохранением форматирования"""
-        if not self.document:
-            raise ValueError("Документ не загружен!")
-        
-        self.logger.info("Применяем изменения")
-        changes_made = 0
-        
-        # Изменяем параграфы
-        for paragraph in self.document.paragraphs:
-            if paragraph.text.strip():
-                original_text = paragraph.text
-                new_text = original_text
-                
-                # Применяем замены
-                for old_text, new_text_replacement in changes.items():
-                    if old_text in new_text:
-                        new_text = new_text.replace(old_text, new_text_replacement)
-                        self.logger.info(f"Заменяем: '{old_text}' -> '{new_text_replacement}'")
-                        changes_made += 1
-                
-                # Обновляем текст с сохранением форматирования
-                if new_text != original_text:
-                    self._update_paragraph_text(paragraph, new_text)
-        
-        # Изменяем таблицы
-        for table in self.document.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    for paragraph in cell.paragraphs:
-                        if paragraph.text.strip():
-                            original_text = paragraph.text
-                            new_text = original_text
-                            
-                            # Применяем замены
-                            for old_text, new_text_replacement in changes.items():
-                                if old_text in new_text:
-                                    new_text = new_text.replace(old_text, new_text_replacement)
-                                    self.logger.info(f"В таблице заменяем: '{old_text}' -> '{new_text_replacement}'")
-                                    changes_made += 1
-                            
-                            # Обновляем текст
-                            if new_text != original_text:
-                                self._update_paragraph_text(paragraph, new_text)
-        
-        self.logger.info(f"Изменения применены: {changes_made} замен")
-        return self
     
     def _update_paragraph_text(self, paragraph, new_text: str):
         """Обновляет текст параграфа с сохранением форматирования"""
@@ -405,27 +351,132 @@ class WordProcessor:
             self.logger.error(f"Ошибка при сохранении документа {output_path}: {e}")
             raise
         return self
+
+
+class DocumentTransformPipeline:
+    """Основной pipeline для трансформации документов"""
     
-    def show_document_info(self):
-        """Показывает информацию о документе"""
-        if not self.document:
-            raise ValueError("Документ не загружен!")
+    def __init__(self):
+        self.logger = Logger('DOCUMENT_TRANSFORM_PIPELINE', 'logs/document_transform_pipeline.log')
+        self.llm_client = None
+        self.word_processor = None
+        self.setup_llm_client()
+        self.setup_word_processor()
+        self.logger.info("DocumentTransformPipeline инициализирован")
+    
+    def setup_llm_client(self):
+        """Инициализация LLM клиента"""
+        try:
+            self.llm_client = OpenRouterClient()
+            self.logger.info("✅ LLM клиент инициализирован")
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка инициализации LLM клиента: {e}")
+            self.llm_client = None
+    
+    def setup_word_processor(self):
+        """Инициализация процессора Word документов"""
+        try:
+            self.word_processor = WordProcessor()
+            self.logger.info("✅ Word процессор инициализирован")
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка инициализации Word процессора: {e}")
+            self.word_processor = None
+    
+    def transform_document(self, file_path: str, prompt: str) -> Dict[str, Any]:
+        """Основная функция трансформации документа"""
+        try:
+            self.logger.info(f"Начинаем трансформацию документа: {file_path}")
+            
+            if not self.llm_client or not self.word_processor:
+                return {
+                    "success": False,
+                    "error": "LLM клиент или Word процессор не инициализированы"
+                }
+            
+            # Проверяем существование файла
+            if not os.path.exists(file_path):
+                return {
+                    "success": False,
+                    "error": f"Файл не найден: {file_path}"
+                }
+            
+            # Обрабатываем документ
+            result_path = self.word_processor.process_document(file_path, prompt, self.llm_client)
+            
+            if result_path and os.path.exists(result_path):
+                return {
+                    "success": True,
+                    "original_file": file_path,
+                    "transformed_file": result_path,
+                    "message": "Документ успешно трансформирован"
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "Ошибка при обработке документа"
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Ошибка трансформации документа: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+
+# Создание экземпляра Pipeline (ленивая инициализация)
+pipeline = None
+
+def get_pipeline():
+    """Получение экземпляра pipeline с ленивой инициализацией"""
+    global pipeline
+    if pipeline is None:
+        try:
+            pipeline = DocumentTransformPipeline()
+        except Exception as e:
+            logger.error(f"❌ Ошибка инициализации pipeline: {e}")
+            return None
+    return pipeline
+
+def pipe(request: Dict[str, Any]) -> Dict[str, Any]:
+    """Основная функция обработки запросов"""
+    try:
+        action = request.get("action", "transform_document")
+        data = request.get("data", {})
         
-        self.logger.info("Информация о документе:")
-        self.logger.info("-" * 40)
+        logger.info(f"🔍 Обработка запроса: {action}")
         
-        # Подсчитываем элементы
-        paragraphs = [p for p in self.document.paragraphs if p.text.strip()]
-        tables = self.document.tables
+        if action == "transform_document":
+            file_path = data.get("file_path")
+            prompt = data.get("prompt", "")
+            
+            if not file_path:
+                return {"error": "Не указан путь к файлу"}
+            
+            if not prompt:
+                return {"error": "Не указан промт для трансформации"}
+            
+            # Получаем pipeline с ленивой инициализацией
+            transform_pipeline = get_pipeline()
+            if not transform_pipeline:
+                return {"error": "Не удалось инициализировать pipeline"}
+            
+            result = transform_pipeline.transform_document(file_path, prompt)
+            return {"action": action, "result": result}
         
-        self.logger.info(f"Параграфов: {len(paragraphs)}")
-        self.logger.info(f"Таблиц: {len(tables)}")
-        
-        # Показываем форматирование
-        self.logger.info("Форматирование:")
-        for i, paragraph in enumerate(paragraphs[:3]):  # Показываем первые 3
-            self.logger.info(f"Параграф {i+1}: {paragraph.text[:50]}...")
-            if paragraph.runs:
-                for j, run in enumerate(paragraph.runs[:2]):  # Показываем первые 2 runs
-                    if run.text.strip():
-                        self.logger.info(f"  Run {j+1}: жирный={run.bold}, курсив={run.italic}")
+        else:
+            return {"error": f"Неизвестное действие: {action}"}
+    
+    except Exception as e:
+        logger.error(f"❌ Ошибка обработки запроса: {e}")
+        return {"error": str(e)}
+
+def on_startup():
+    """Инициализация при запуске"""
+    logger.info("🚀 Document Transform Pipeline запущен")
+    logger.info(f"📁 Папка для исходных файлов: docs/")
+    logger.info(f"📁 Папка для обработанных файлов: new_docs/")
+
+def on_shutdown():
+    """Очистка при остановке"""
+    logger.info("🛑 Document Transform Pipeline остановлен")

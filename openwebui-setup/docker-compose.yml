@@ -21,7 +21,6 @@ services:
     depends_on:
       - pipelines
       - mcpo
-      - jur-mcpo
 
   pipelines:
     image: ghcr.io/open-webui/pipelines:main
@@ -39,11 +38,7 @@ services:
       - PIPELINES_AUTO_LOAD_DIR=/app/custom_pipelines
       - PIPELINES_API_KEY=0p3n-w3bu!
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-      - DB_URL=${DB_URL}
-      - DB_NAME=${DB_NAME}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
+      - MODEL_NAME=${MODEL_NAME:-google/gemma-3-27b-it:free}
 
   mcpo:
     build:
@@ -61,27 +56,6 @@ services:
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - MCPO_API_KEY=${MCPO_API_KEY:-mcpo-secret}
-
-  jur-mcpo:
-    build:
-      context: .
-      dockerfile: Dockerfile.jur-mcpo
-    container_name: jur-mcpo
-    ports:
-      - "${JUR_MCPO_PORT:-8001}:8001"
-    volumes:
-      - ./mcpo_servers:/app/mcpo_servers:ro
-      - ./logs:/app/logs
-    networks:
-      - webui-network
-    restart: unless-stopped
-    environment:
-      - MCPO_API_KEY=${MCPO_API_KEY:-mcpo-secret}
-      - DB_URL=${DB_URL}
-      - DB_NAME=${DB_NAME}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-
 
 volumes:
   openwebui_data:

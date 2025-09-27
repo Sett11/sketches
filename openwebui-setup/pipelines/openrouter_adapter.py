@@ -12,6 +12,16 @@ from typing import List, Union, Generator, Iterator
 import os
 import requests
 from pydantic import BaseModel
+import sys
+
+# Добавляем путь для импорта логгера
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+from mylogger import Logger
+
+# Настройка логирования
+logger = Logger('OPENROUTER_ADAPTER', 'logs/openrouter_adapter.log')
 
 
 class Pipeline:
@@ -39,16 +49,16 @@ class Pipeline:
 
     async def on_startup(self):
         """Called when the server starts"""
-        print(f"on_startup: {__name__}")
+        logger.info(f"on_startup: {__name__}")
         self.pipelines = self.get_openrouter_models()
 
     async def on_shutdown(self):
         """Called when the server stops"""
-        print(f"on_shutdown: {__name__}")
+        logger.info(f"on_shutdown: {__name__}")
 
     async def on_valves_updated(self):
         """Called when valves are updated"""
-        print(f"on_valves_updated: {__name__}")
+        logger.info(f"on_valves_updated: {__name__}")
         self.pipelines = self.get_openrouter_models()
 
     def get_openrouter_models(self):
@@ -97,7 +107,7 @@ class Pipeline:
             ]
             
         except Exception as e:
-            print(f"Error fetching OpenRouter models: {e}")
+            logger.error(f"Error fetching OpenRouter models: {e}")
             return [
                 {
                     "id": "error",
@@ -112,11 +122,11 @@ class Pipeline:
         
         # Log user information if available
         if "user" in body:
-            print("######################################")
-            print(f'# User: {body["user"]["name"]} ({body["user"]["id"]})')
-            print(f"# Model: {model_id}")
-            print(f"# Message: {user_message}")
-            print("######################################")
+            logger.info("######################################")
+            logger.info(f'# User: {body["user"]["name"]} ({body["user"]["id"]})')
+            logger.info(f"# Model: {model_id}")
+            logger.info(f"# Message: {user_message}")
+            logger.info("######################################")
 
         # Check if API key is configured
         if not self.valves.OPENROUTER_API_KEY:
@@ -156,9 +166,9 @@ class Pipeline:
 
         except requests.exceptions.RequestException as e:
             error_msg = f"OpenRouter API Error: {str(e)}"
-            print(error_msg)
+            logger.error(error_msg)
             return error_msg
         except Exception as e:
             error_msg = f"Pipeline Error: {str(e)}"
-            print(error_msg)
+            logger.error(error_msg)
             return error_msg

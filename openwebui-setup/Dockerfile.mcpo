@@ -22,9 +22,9 @@ RUN uv sync
 # Копирование MCP сервера
 COPY mcpo_servers /app/mcpo_servers
 
-# Копирование и установка зависимостей проекта
+# Копирование и установка зависимостей проекта в виртуальную среду MCPO
 COPY requirements.txt /app/requirements.txt
-RUN uv pip install -r /app/requirements.txt
+RUN uv pip install -r /app/requirements.txt --python /app/mcpo/.venv/bin/python
 
 # Создание директории для логов
 RUN mkdir -p /app/logs
@@ -36,4 +36,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
 # Запуск MCPO с OpenRouter MCP сервером
-CMD ["sh", "-c", "uv run mcpo --port 8000 --api-key ${MCPO_API_KEY:-mcpo-secret} -- python /app/mcpo_servers/openrouter_mcp.py"]
+CMD ["sh", "-c", "cd /app/mcpo && uv run mcpo --port 8000 --api-key ${MCPO_API_KEY:-mcpo-secret} -- python /app/mcpo_servers/openrouter_mcp.py"]
