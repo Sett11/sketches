@@ -10,7 +10,6 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 import requests
 from docx import Document
-import time
 
 # Импортируем наш логгер
 import sys
@@ -438,45 +437,5 @@ def get_pipeline():
             return None
     return pipeline
 
-def pipe(request: Dict[str, Any]) -> Dict[str, Any]:
-    """Основная функция обработки запросов"""
-    try:
-        action = request.get("action", "transform_document")
-        data = request.get("data", {})
-        
-        logger.info(f"🔍 Обработка запроса: {action}")
-        
-        if action == "transform_document":
-            file_path = data.get("file_path")
-            prompt = data.get("prompt", "")
-            
-            if not file_path:
-                return {"error": "Не указан путь к файлу"}
-            
-            if not prompt:
-                return {"error": "Не указан промт для трансформации"}
-            
-            # Получаем pipeline с ленивой инициализацией
-            transform_pipeline = get_pipeline()
-            if not transform_pipeline:
-                return {"error": "Не удалось инициализировать pipeline"}
-            
-            result = transform_pipeline.transform_document(file_path, prompt)
-            return {"action": action, "result": result}
-        
-        else:
-            return {"error": f"Неизвестное действие: {action}"}
-    
-    except Exception as e:
-        logger.error(f"❌ Ошибка обработки запроса: {e}")
-        return {"error": str(e)}
-
-def on_startup():
-    """Инициализация при запуске"""
-    logger.info("🚀 Document Transform Pipeline запущен")
-    logger.info(f"📁 Папка для исходных файлов: docs/")
-    logger.info(f"📁 Папка для обработанных файлов: new_docs/")
-
-def on_shutdown():
-    """Очистка при остановке"""
-    logger.info("🛑 Document Transform Pipeline остановлен")
+# Старые функции pipe(), on_startup(), on_shutdown() удалены
+# Теперь используется только get_pipeline() для ленивой инициализации
