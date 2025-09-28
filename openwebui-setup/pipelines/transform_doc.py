@@ -1,26 +1,31 @@
-#!/usr/bin/env python3
 """
-Единый Pipeline для трансформации Word документов с помощью LLM
-Содержит всю логику: OpenRouterClient, WordProcessor, DocumentTransformPipeline
+title: Document Transform Pipeline
+author: open-webui
+date: 2024-12-19
+version: 1.0
+license: MIT
+description: A pipeline for transforming Word documents using LLM
+requirements: python-docx, requests
+model: google/gemma-3-27b-it:free
 """
 
 import os
 import re
-from typing import Dict, List, Any, Optional
+import time
+import base64
+from typing import Dict, Any, Union, Generator, Iterator, List, Optional
 from datetime import datetime
 import requests
 from docx import Document
 
 # Импортируем наш логгер
 import sys
-# Добавляем родительскую директорию в путь для импорта
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
+# Добавляем путь к mylogger.py
+sys.path.append('/app')
 from mylogger import Logger
 
 # Настройка логирования
-logger = Logger('DOCUMENT_TRANSFORM', 'logs/document_transform.log')
+logger = Logger('DOCUMENT_TRANSFORM_PIPELINE', 'logs/document_transform.log')
 
 class OpenRouterClient:
     """Клиент для работы с OpenRouter API"""
@@ -35,8 +40,9 @@ class OpenRouterClient:
         if not self.api_key:
             raise ValueError("OPENROUTER_API_KEY не найден в переменных окружения")
         
+        # Обращаемся напрямую к OpenRouter API (доступно через host.docker.internal)
         self.base_url = "https://openrouter.ai/api/v1/chat/completions"
-        logger.info(f"OpenRouterClient инициализирован: model={self.model_name}")
+        logger.info(f"OpenRouterClient инициализирован: model={self.model_name}, base_url={self.base_url}")
 
     def generate(self, messages: list, max_retries: int = 3, delay: int = 600, 
                  temperature: float = 0.3, max_tokens: int = 2048, idop: int = 0):
@@ -162,8 +168,8 @@ class WordProcessor:
         output_filename = f"transformed_{timestamp}_{base_name}"
         
         # Создаем папку new_docs если не существует
-        os.makedirs("new_docs", exist_ok=True)
-        output_path = f"new_docs/{output_filename}"
+        os.makedirs("/app/new_docs", exist_ok=True)
+        output_path = f"/app/new_docs/{output_filename}"
         
         # Сохраняем обработанный документ
         self.save_document(output_path)
@@ -423,19 +429,125 @@ class DocumentTransformPipeline:
             }
 
 
-# Создание экземпляра Pipeline (ленивая инициализация)
-pipeline = None
+class Pipeline:
+    def __init__(self):
+        self.logger = Logger('DOCUMENT_TRANSFORM_PIPELINE', 'logs/document_transform.log')
+        self.logger.info("🚀 Document Transform Pipeline инициализирован")
+        
+        # Инициализируем компоненты pipeline'а
+        self.transform_pipeline = None
+        self.setup_transform_pipeline()
 
-def get_pipeline():
-    """Получение экземпляра pipeline с ленивой инициализацией"""
-    global pipeline
-    if pipeline is None:
+    def setup_transform_pipeline(self):
+        """Инициализация pipeline трансформации"""
         try:
-            pipeline = DocumentTransformPipeline()
+            self.transform_pipeline = DocumentTransformPipeline()
+            self.logger.info("✅ Pipeline трансформации инициализирован")
         except Exception as e:
-            logger.error(f"❌ Ошибка инициализации pipeline: {e}")
-            return None
-    return pipeline
+            self.logger.error(f"❌ Ошибка инициализации pipeline трансформации: {e}")
+            self.transform_pipeline = None
 
-# Старые функции pipe(), on_startup(), on_shutdown() удалены
-# Теперь используется только get_pipeline() для ленивой инициализации
+    async def on_startup(self):
+        """Функция вызывается при запуске сервера"""
+        self.logger.info("🚀 Document Transform Pipeline запущен")
+        self.logger.info("📁 Папки: /app/docs/ (входные файлы), /app/new_docs/ (обработанные файлы)")
+        # Создаем необходимые папки
+        os.makedirs("/app/docs", exist_ok=True)
+        os.makedirs("/app/new_docs", exist_ok=True)
+
+    async def on_shutdown(self):
+        """Функция вызывается при остановке сервера"""
+        self.logger.info("🛑 Document Transform Pipeline остановлен")
+
+    def transform_document(self, file_data: str, filename: str, prompt: str) -> Dict[str, Any]:
+        """Трансформация документа"""
+        try:
+            self.logger.info(f"Начинаем трансформацию документа: {filename}")
+            
+            if not self.transform_pipeline:
+                return {"success": False, "error": "Pipeline трансформации не инициализирован"}
+            
+            # Декодируем файл из base64
+            if isinstance(file_data, str):
+                file_bytes = base64.b64decode(file_data)
+            else:
+                file_bytes = file_data
+            
+            # Сохраняем файл
+            input_path = f"/app/docs/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}"
+            with open(input_path, 'wb') as f:
+                f.write(file_bytes)
+            self.logger.info(f"Файл сохранен: {input_path}")
+            
+            # Выполняем трансформацию
+            result = self.transform_pipeline.transform_document(input_path, prompt)
+            
+            if result.get("success"):
+                # Читаем трансформированный файл и возвращаем в base64
+                transformed_path = result["transformed_file"]
+                with open(transformed_path, 'rb') as f:
+                    transformed_data = f.read()
+                transformed_base64 = base64.b64encode(transformed_data).decode('utf-8')
+                
+                return {
+                    "success": True,
+                    "transformed_file": transformed_base64,
+                    "transformed_filename": os.path.basename(transformed_path),
+                    "message": "Документ успешно трансформирован"
+                }
+            else:
+                return {"success": False, "error": result.get("error", "Неизвестная ошибка трансформации")}
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка трансформации документа: {e}")
+            return {"success": False, "error": str(e)}
+
+    def pipe(
+        self, user_message: str, model_id: str, messages: List[dict], body: dict
+    ) -> Union[str, Generator, Iterator, Dict[str, Any]]:
+        """
+        Основная функция pipeline для обработки запросов
+        Соответствует стандарту OpenWebUI Pipelines
+        """
+        try:
+            self.logger.info(f"🔍 Обработка запроса: {user_message}")
+            
+            # Извлекаем данные из body
+            file_data = body.get("file_data")
+            prompt = body.get("prompt", user_message)  # Используем user_message как промт по умолчанию
+            filename = body.get("filename", "document.docx")
+            
+            if not file_data:
+                return {
+                    "success": False,
+                    "error": "Не предоставлен файл для трансформации"
+                }
+            
+            if not prompt:
+                return {
+                    "success": False,
+                    "error": "Не указан промт для трансформации"
+                }
+            
+            # Выполняем трансформацию
+            result = self.transform_document(file_data, filename, prompt)
+            
+            # Возвращаем полную структуру данных с трансформированным файлом
+            if result.get("success"):
+                return {
+                    "success": True,
+                    "message": result.get("message", "Документ успешно трансформирован"),
+                    "transformed_file": result.get("transformed_file"),
+                    "transformed_filename": result.get("transformed_filename")
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": result.get("error", "Ошибка трансформации")
+                }
+                
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка обработки запроса: {e}")
+            return {
+                "success": False,
+                "error": f"Ошибка: {str(e)}"
+            }
