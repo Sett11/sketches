@@ -28,10 +28,11 @@ services:
       - "${PIPELINES_PORT:-9099}:9099"
     volumes:
       - pipelines_data:/app/pipelines
-      - ./pipelines:/app/custom_pipelines:ro
+      - ./pipelines:/app/custom_pipelines
       - ./requirements.txt:/app/requirements.txt:ro
       - ./mylogger.py:/app/mylogger.py:ro
       - ./logs:/app/logs
+      - openwebui_data:/app/backend/data:ro
     networks:
       - webui-network
     restart: unless-stopped
@@ -43,6 +44,7 @@ services:
       - PIPELINES_API_KEY=0p3n-w3bu!
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - MODEL_NAME=${MODEL_NAME:-google/gemma-3-27b-it:free}
+      - PIPELINES_AUTO_RELOAD=true
 
 volumes:
   openwebui_data:

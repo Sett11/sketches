@@ -17,6 +17,7 @@ from typing import Dict, Any, Union, Generator, Iterator, List, Optional
 from datetime import datetime
 import requests
 from docx import Document
+from pydantic import BaseModel
 
 # Импортируем наш логгер
 import sys
@@ -430,6 +431,9 @@ class DocumentTransformPipeline:
 
 
 class Pipeline:
+    class Valves(BaseModel):
+        pass
+
     def __init__(self):
         self.logger = Logger('DOCUMENT_TRANSFORM_PIPELINE', 'logs/document_transform.log')
         self.logger.info("🚀 Document Transform Pipeline инициализирован")
@@ -501,6 +505,27 @@ class Pipeline:
             self.logger.error(f"❌ Ошибка трансформации документа: {e}")
             return {"success": False, "error": str(e)}
 
+    def _is_document_transform_request(self, user_message: str, body: dict) -> bool:
+        """
+        Определяет, является ли запрос запросом на трансформацию документа
+        """
+        # Системные запросы OpenWebUI (игнорируем)
+        system_keywords = [
+            "### Task:", "Generate", "Analyze the chat history", 
+            "Suggest", "Generate a concise", "Generate 1-3 broad tags",
+            "Determine the necessity", "JSON format", "Chat History:",
+            "Follow-up questions", "broad tags categorizing"
+        ]
+        
+        for keyword in system_keywords:
+            if keyword in user_message:
+                self.logger.info(f"🚫 Системный запрос обнаружен: {keyword}")
+                return False
+        
+        # Если это не системный запрос, считаем его запросом на трансформацию
+        self.logger.info(f"✅ Обрабатываем как запрос на трансформацию: {user_message[:50]}...")
+        return True
+
     def pipe(
         self, user_message: str, model_id: str, messages: List[dict], body: dict
     ) -> Union[str, Generator, Iterator, Dict[str, Any]]:
@@ -510,17 +535,67 @@ class Pipeline:
         """
         try:
             self.logger.info(f"🔍 Обработка запроса: {user_message}")
+            self.logger.info(f"📋 Body: {body}")
+            self.logger.info(f"📋 Body keys: {list(body.keys()) if body else 'None'}")
+            self.logger.info(f"📋 Body type: {type(body)}")
+            
+            # Обрабатываем ВСЕ запросы как запросы на трансформацию
+            self.logger.info("✅ Обрабатываем как запрос на трансформацию")
             
             # Извлекаем данные из body
-            file_data = body.get("file_data")
-            prompt = body.get("prompt", user_message)  # Используем user_message как промт по умолчанию
-            filename = body.get("filename", "document.docx")
+            file_data = body.get("file_data") if body else None
+            prompt = body.get("prompt", user_message) if body else user_message  # Используем user_message как промт по умолчанию
+            filename = body.get("filename", "document.docx") if body else "document.docx"
             
+            self.logger.info(f"📄 file_data: {file_data is not None}")
+            self.logger.info(f"📄 prompt: {prompt}")
+            self.logger.info(f"📄 filename: {filename}")
+            
+            # Если нет file_data, ищем файлы в папке uploads
             if not file_data:
-                return {
-                    "success": False,
-                    "error": "Не предоставлен файл для трансформации"
-                }
+                self.logger.info("🔍 Файл не передан в body, ищем в папке uploads...")
+                uploads_path = "/app/backend/data/uploads"
+                
+                if os.path.exists(uploads_path):
+                    files = os.listdir(uploads_path)
+                    self.logger.info(f"📁 Найдено файлов в uploads: {files}")
+                    
+                    # Ищем последний загруженный файл
+                    if files:
+                        # Сортируем по времени модификации
+                        files_with_time = []
+                        for file in files:
+                            file_path = os.path.join(uploads_path, file)
+                            if os.path.isfile(file_path):
+                                mtime = os.path.getmtime(file_path)
+                                files_with_time.append((file, mtime))
+                        
+                        if files_with_time:
+                            # Берем самый новый файл
+                            latest_file = max(files_with_time, key=lambda x: x[1])
+                            filename = latest_file[0]
+                            file_path = os.path.join(uploads_path, filename)
+                            
+                            self.logger.info(f"📄 Используем файл: {filename}")
+                            
+                            # Читаем файл и кодируем в base64
+                            with open(file_path, 'rb') as f:
+                                file_data = base64.b64encode(f.read()).decode('utf-8')
+                        else:
+                            return {
+                                "success": False,
+                                "error": "В папке uploads нет файлов"
+                            }
+                    else:
+                        return {
+                            "success": False,
+                            "error": "Папка uploads пуста"
+                        }
+                else:
+                    return {
+                        "success": False,
+                        "error": "Папка uploads не найдена"
+                    }
             
             if not prompt:
                 return {
