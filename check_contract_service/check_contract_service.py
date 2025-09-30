@@ -80,6 +80,7 @@ class ContractChecker:
     def __init__(self):
         self.llm_client = LLMClient(LLM_API_URL, LLM_API_KEY, LLM_MODEL)
         self.prompts = self._load_prompts()
+        self.category_mapping = self._build_category_mapping()
     
     def _load_prompts(self) -> Dict[str, Any]:
         """Загружает промты из JSON файла"""
@@ -93,6 +94,22 @@ class ContractChecker:
             logger.error(f"Invalid JSON in prompts file: {e}")
             return {"categories": {}}
     
+    def _build_category_mapping(self) -> Dict[str, str]:
+        """Создает маппинг отображаемых имен на ключи JSON"""
+        mapping = {}
+        categories = self.prompts.get("categories", {})
+        
+        for json_key, category_data in categories.items():
+            if isinstance(category_data, dict) and "display_name" in category_data:
+                display_name = category_data["display_name"]
+                mapping[display_name.lower()] = json_key
+            elif isinstance(category_data, str):
+                # Если категория - просто строка, используем её как отображаемое имя
+                mapping[category_data.lower()] = json_key
+        
+        logger.info(f"Создан маппинг категорий: {len(mapping)} элементов")
+        return mapping
+    
     def categorize_contract(self, contract_text: str) -> str:
         """Определяет категорию договора"""
         try:
@@ -103,55 +120,34 @@ class ContractChecker:
             
             categories = list(self.prompts["categories"].keys())
             
-            # Создаём промт для категоризации на основе предоставленного списка
+            # Создаём промт для категоризации на основе загруженных категорий
+            categories_data = self.prompts.get("categories", {})
             categories_list = ", ".join([
-                "Розничная купля-продажа", "Поставка", "Продажа недвижимости", "Мена", "Дарение",
-                "Аренда", "Финансовая аренда (Лизинг)", "Подряд", "Возмездное оказание услуг",
-                "Перевозка", "Заем", "Кредит", "Банковский вклад", "Банковский счет",
-                "Хранение", "Страхование", "Поручение", "Комиссия", "Агентирование",
-                "Простое товарищество", "Лицензионный договор"
+                item.get("display_name", item) if isinstance(item, dict) else item
+                for item in categories_data.values()
+                if item  # Фильтруем пустые значения
             ])
+            
+            # Fallback если JSON поврежден или пуст
+            if not categories_list:
+                logger.warning("Не удалось извлечь категории из JSON, используем пустой список")
+                categories_list = ""
             
             prompt = f"""Определи категорию договора из следующего списка: {categories_list}
 
 Текст договора: {contract_text}
 
-Ответь ТОЛЬКО названием категории из списка выше."""
+Ответь ТОЛЬКО названием категории из списка выше и так, как в списке выше - с сохранением орфографии и регистра."""
             
             response = self.llm_client.generate_response(prompt)
             
-            # Маппинг русских названий на ключи JSON
-            category_mapping = {
-                "розничная купля-продажа": "розничная_купля_продажа",
-                "поставка": "поставка",
-                "продажа недвижимости": "продажа_недвижимости",
-                "мена": "мена",
-                "дарение": "дарение",
-                "аренда": "аренда",
-                "финансовая аренда (лизинг)": "финансовая_аренда_лизинг",
-                "подряд": "подряд",
-                "возмездное оказание услуг": "возмездное_оказание_услуг",
-                "перевозка": "перевозка",
-                "заем": "заем",
-                "кредит": "кредит",
-                "банковский вклад": "банковский_вклад",
-                "банковский счет": "банковский_счет",
-                "хранение": "хранение",
-                "страхование": "страхование",
-                "поручение": "поручение",
-                "комиссия": "комиссия",
-                "агентирование": "агентирование",
-                "простое товарищество": "простое_товарищество",
-                "лицензионный договор": "лицензионный_договор"
-            }
-            
-            # Ищем совпадение с маппингом
+            # Ищем совпадение с предварительно созданным маппингом
             response_clean = response.strip().lower()
-            for russian_name, json_key in category_mapping.items():
-                if russian_name.lower() == response_clean:
-                    if json_key in categories:
-                        logger.info(f"Определена категория: {json_key}")
-                        return json_key
+            if response_clean in self.category_mapping:
+                json_key = self.category_mapping[response_clean]
+                if json_key in categories:
+                    logger.info(f"Определена категория: {json_key}")
+                    return json_key
             
             # Если категория не найдена в маппинге - возвращаем None
             logger.warning(f"Category not found in mapping: {response}")
