@@ -42,7 +42,7 @@ class ContractRequest(BaseModel):
 class ContractResponse(BaseModel):
     category: str
     validation_result: str
-    is_valid: bool
+    is_valid: bool | None
 
 
 # -------- OpenAI-compatible schemas (minimal) --------
@@ -129,8 +129,6 @@ class ContractChecker:
     def __init__(self):
         self.llm_client = LLMClient(LLM_API_URL, LLM_API_KEY, LLM_MODEL)
         self.prompts = self._load_prompts()
-        # Маппинг display_name -> json_key для устойчивого сопоставления ответа модели
-        self.display_to_key = self._build_display_mapping()
 
     def _load_prompts(self) -> Dict[str, Any]:
         """Загружает промты из JSON файла"""
@@ -144,14 +142,6 @@ class ContractChecker:
             logger.error(f"Invalid JSON in prompts file: {e}")
             return {"categories": {}}
 
-    def _build_display_mapping(self) -> Dict[str, str]:
-        mapping: Dict[str, str] = {}
-        categories = self.prompts.get("categories", {})
-        for key, data in categories.items():
-            if isinstance(data, dict) and isinstance(data.get("display_name"), str):
-                mapping[data["display_name"].strip().lower()] = key
-        logger.info(f"Display mapping size: {len(mapping)}")
-        return mapping
 
     def check_contract(self, contract_text: str, user_prompt: str = "") -> ContractResponse:
         """Прозрачная прокладка: один запрос к модели и возврат её ответа как есть."""
@@ -161,7 +151,11 @@ class ContractChecker:
                 "Проведи юридический анализ текста договора: выяви риски, несоответствия закону, пробелы, "
                 "неоднозначные формулировки, рекомендации по исправлению и краткий итог. Ответ верни простым текстом."
             )
+            
+            # Включаем user_prompt в master_prompt, если он не пустой
             master_prompt = f"{instruction}\n\nТекст договора:\n{contract_text}"
+            if user_prompt and user_prompt.strip():
+                master_prompt = f"{instruction}\n\nДополнительные требования пользователя:\n{user_prompt.strip()}\n\nТекст договора:\n{contract_text}"
 
             llm_output = self.llm_client.generate_response(master_prompt)
             validation_result = (llm_output or "").strip()
@@ -169,11 +163,138 @@ class ContractChecker:
             return ContractResponse(
                 category="passthrough",
                 validation_result=validation_result,
-                is_valid=False,
+                is_valid=None,  # Нейтральное значение для passthrough режима
             )
         except Exception as e:
             logger.error(f"Error in check_contract(single-pass): {e}")
             raise HTTPException(status_code=500, detail=str(e))
+
+# Модульные helper функции
+def normalize_content(raw: Any, captured_json_parts: list[dict[str, Any]] = None) -> str:
+    """Нормализатор контента: извлекает текст из строки или массива частей"""
+    if captured_json_parts is None:
+        captured_json_parts = []
+    
+    try:
+        if raw is None:
+            return ""
+        if isinstance(raw, str):
+            return raw
+        if isinstance(raw, list):
+            parts: list[str] = []
+            for item in raw:
+                if isinstance(item, dict):
+                    item_type = item.get("type")
+                    # Стандарт OpenAI: {type: "text", text: "..."} и {type: "input_text", text: "..."}
+                    if item_type in ("text", "input_text") and isinstance(item.get("text"), str):
+                        parts.append(item.get("text", ""))
+                    # Поддержка {type:"input_json", json:{...}}
+                    elif item_type == "input_json" and isinstance(item.get("json"), dict):
+                        captured_json_parts.append(item.get("json"))
+                        try:
+                            parts.append(json.dumps(item.get("json"), ensure_ascii=False))
+                        except (json.JSONDecodeError, TypeError, ValueError):
+                            pass
+                    # Некоторые клиенты кладут "content" вместо text
+                    elif isinstance(item.get("content"), str):
+                        parts.append(item.get("content", ""))
+                elif isinstance(item, str):
+                    parts.append(item)
+            return "\n\n".join([p for p in parts if p])
+        if isinstance(raw, dict):
+            # Единичный объект input_json
+            if raw.get("type") == "input_json" and isinstance(raw.get("json"), dict):
+                captured_json_parts.append(raw.get("json"))
+                try:
+                    return json.dumps(raw.get("json"), ensure_ascii=False)
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    return ""
+            # Нетривиальные клиенты
+            if isinstance(raw.get("text"), str):
+                return raw.get("text", "")
+            if isinstance(raw.get("content"), str):
+                return raw.get("content", "")
+        return str(raw)
+    except Exception:
+        return ""
+
+
+def extract_contract_text_from_messages(body: ChatCompletionsRequest, raw_payload: dict[str, Any]) -> tuple[str, str, str, int]:
+    """Извлекает текст договора и пользовательский промт из сообщений"""
+    captured_json_parts: list[dict[str, Any]] = []
+    
+    # Сливаем все пользовательские сообщения в один текст (для совместимости с простыми клиентами)
+    user_messages = [m for m in body.messages if m.role == "user" and m.content]
+    if not user_messages:
+        raise HTTPException(status_code=400, detail="No user message provided")
+
+    concatenated_user_text = "\n\n".join([
+        normalized.strip() for m in user_messages 
+        for normalized in [normalize_content(m.content, captured_json_parts)] 
+        if normalized.strip()
+    ])
+    content = concatenated_user_text
+    logger.info(f"/v1/chat/completions: combined_user_text_len={len(content)}")
+
+    # Дополнительно: ищем самый длинный текст среди ВСЕХ сообщений (любой роли)
+    longest_text = content
+    longest_len = len(longest_text)
+    for msg in body.messages:
+        try:
+            txt = normalize_content(msg.content, captured_json_parts).strip()
+            if txt and len(txt) > longest_len:
+                longest_text = txt
+                longest_len = len(txt)
+        except Exception:
+            continue
+
+    # Пытаемся распарсить JSON c полями contract_text/user_prompt, иначе воспринимаем весь контент как текст договора
+    contract_text = content
+    user_prompt = ""
+    parsed_from_text = False
+    try:
+        parsed = json.loads(content)
+        if isinstance(parsed, dict) and parsed.get("contract_text"):
+            contract_text = str(parsed.get("contract_text") or "").strip()
+            user_prompt = str(parsed.get("user_prompt") or "").strip()
+            parsed_from_text = True
+            logger.info(f"/v1/chat/completions: detected JSON payload in text, contract_len={len(contract_text)}, user_prompt_len={len(user_prompt)}")
+    except json.JSONDecodeError:
+        logger.info("/v1/chat/completions: text is not JSON")
+
+    # Если не удалось распарсить из текста, пробуем достать из input_json частей
+    if not parsed_from_text and captured_json_parts:
+        for obj in captured_json_parts:
+            if isinstance(obj, dict) and obj.get("contract_text"):
+                contract_text = str(obj.get("contract_text") or "").strip()
+                user_prompt = str(obj.get("user_prompt") or "").strip()
+                logger.info(f"/v1/chat/completions: detected input_json part, contract_len={len(contract_text)}, user_prompt_len={len(user_prompt)}")
+                break
+
+    return contract_text, user_prompt, longest_text, longest_len
+
+
+def extract_from_attachment(att: dict, current_best: str) -> str:
+    """Извлекает текст из attachment, возвращает более длинный кандидат если найден"""
+    try:
+        if not isinstance(att, dict) or not isinstance(current_best, str):
+            return ""
+        
+        # Частые варианты: {type:"text", content:"..."} или {mime:"text/plain", data:"..."}
+        if isinstance(att.get("content"), str) and att.get("type") in ("text", "document"):
+            candidate = att.get("content")
+            if len(candidate) > len(current_best):
+                logger.info(f"/v1/chat/completions: extracted from attachments.content, len={len(candidate)}")
+                return candidate
+        elif isinstance(att.get("data"), str) and str(att.get("mime")).startswith("text"):
+            candidate = att.get("data")
+            if len(candidate) > len(current_best):
+                logger.info(f"/v1/chat/completions: extracted from attachments.data, len={len(candidate)}")
+                return candidate
+    except Exception:
+        pass
+    return ""
+
 
 # Инициализация
 contract_checker = ContractChecker()
@@ -242,99 +363,9 @@ async def chat_completions(body: ChatCompletionsRequest, request: Request):
                 raw_payload = body.dict()  # pydantic v1 fallback
             except Exception:
                 raw_payload = {}
-        # Будем собирать JSON-части вида {"type":"input_json","json":{...}}
-        captured_json_parts: list[dict[str, Any]] = []
 
-        # Нормализатор контента: извлекает текст из строки или массива частей
-        def normalize_content(raw: Any) -> str:
-            try:
-                if raw is None:
-                    return ""
-                if isinstance(raw, str):
-                    return raw
-                if isinstance(raw, list):
-                    parts: list[str] = []
-                    for item in raw:
-                        if isinstance(item, dict):
-                            item_type = item.get("type")
-                            # Стандарт OpenAI: {type: "text", text: "..."} и {type: "input_text", text: "..."}
-                            if item_type in ("text", "input_text") and isinstance(item.get("text"), str):
-                                parts.append(item.get("text", ""))
-                            # Поддержка {type:"input_json", json:{...}}
-                            elif item_type == "input_json" and isinstance(item.get("json"), dict):
-                                captured_json_parts.append(item.get("json"))
-                                try:
-                                    parts.append(json.dumps(item.get("json"), ensure_ascii=False))
-                                except Exception:
-                                    pass
-                            # Некоторые клиенты кладут "content" вместо text
-                            elif isinstance(item.get("content"), str):
-                                parts.append(item.get("content", ""))
-                        elif isinstance(item, str):
-                            parts.append(item)
-                    return "\n\n".join([p for p in parts if p])
-                if isinstance(raw, dict):
-                    # Единичный объект input_json
-                    if raw.get("type") == "input_json" and isinstance(raw.get("json"), dict):
-                        captured_json_parts.append(raw.get("json"))
-                        try:
-                            return json.dumps(raw.get("json"), ensure_ascii=False)
-                        except Exception:
-                            return ""
-                    # Нетривиальные клиенты
-                    if isinstance(raw.get("text"), str):
-                        return raw.get("text", "")
-                    if isinstance(raw.get("content"), str):
-                        return raw.get("content", "")
-                return str(raw)
-            except Exception:
-                return ""
-
-        # Сливаем все пользовательские сообщения в один текст (для совместимости с простыми клиентами)
-        user_messages = [m for m in body.messages if m.role == "user" and m.content]
-        if not user_messages:
-            raise HTTPException(status_code=400, detail="No user message provided")
-
-        concatenated_user_text = "\n\n".join([
-            normalize_content(m.content).strip() for m in user_messages if normalize_content(m.content).strip()
-        ])
-        content = concatenated_user_text
-        logger.info(f"/v1/chat/completions: combined_user_text_len={len(content)}")
-
-        # Дополнительно: ищем самый длинный текст среди ВСЕХ сообщений (любой роли)
-        longest_text = content
-        longest_len = len(longest_text)
-        for msg in body.messages:
-            try:
-                txt = normalize_content(msg.content).strip()
-                if txt and len(txt) > longest_len:
-                    longest_text = txt
-                    longest_len = len(txt)
-            except Exception:
-                continue
-
-        # Пытаемся распарсить JSON c полями contract_text/user_prompt, иначе воспринимаем весь контент как текст договора
-        contract_text = content
-        user_prompt = ""
-        parsed_from_text = False
-        try:
-            parsed = json.loads(content)
-            if isinstance(parsed, dict) and parsed.get("contract_text"):
-                contract_text = str(parsed.get("contract_text") or "").strip()
-                user_prompt = str(parsed.get("user_prompt") or "").strip()
-                parsed_from_text = True
-                logger.info(f"/v1/chat/completions: detected JSON payload in text, contract_len={len(contract_text)}, user_prompt_len={len(user_prompt)}")
-        except json.JSONDecodeError:
-            logger.info("/v1/chat/completions: text is not JSON")
-
-        # Если не удалось распарсить из текста, пробуем достать из input_json частей
-        if not parsed_from_text and captured_json_parts:
-            for obj in captured_json_parts:
-                if isinstance(obj, dict) and obj.get("contract_text"):
-                    contract_text = str(obj.get("contract_text") or "").strip()
-                    user_prompt = str(obj.get("user_prompt") or "").strip()
-                    logger.info(f"/v1/chat/completions: detected input_json part, contract_len={len(contract_text)}, user_prompt_len={len(user_prompt)}")
-                    break
+        # Извлекаем текст договора и пользовательский промт из сообщений
+        contract_text, user_prompt, longest_text, longest_len = extract_contract_text_from_messages(body, raw_payload)
 
         # Если всё ещё нет текста — пробуем извлечь из root-полей (attachments/contract_text)
         if not contract_text or len(contract_text) < 30:
@@ -346,19 +377,9 @@ async def chat_completions(body: ChatCompletionsRequest, request: Request):
             # attachments
             elif isinstance(raw_payload.get("attachments"), list):
                 for att in raw_payload.get("attachments"):
-                    try:
-                        # Частые варианты: {type:"text", content:"..."} или {mime:"text/plain", data:"..."}
-                        if isinstance(att, dict):
-                            if isinstance(att.get("content"), str) and att.get("type") in ("text", "document"):
-                                if len(att.get("content")) > len(contract_text):
-                                    contract_text = att.get("content")
-                                    logger.info(f"/v1/chat/completions: extracted from attachments.content, len={len(contract_text)}")
-                            elif isinstance(att.get("data"), str) and str(att.get("mime")).startswith("text"):
-                                if len(att.get("data")) > len(contract_text):
-                                    contract_text = att.get("data")
-                                    logger.info(f"/v1/chat/completions: extracted from attachments.data, len={len(contract_text)}")
-                    except Exception:
-                        continue
+                    candidate = extract_from_attachment(att, contract_text)
+                    if candidate:
+                        contract_text = candidate
             # Поиск вложенного contract_text в любых словарях сообщений
             if (not contract_text or len(contract_text) < 30) and body.messages:
                 # просматриваем все сообщения (любой роли), чтобы повторные вызовы тоже подхватывали текст из истории
@@ -391,18 +412,9 @@ async def chat_completions(body: ChatCompletionsRequest, request: Request):
                             atts = rm.get("attachments")
                             if isinstance(atts, list):
                                 for att in atts:
-                                    try:
-                                        if isinstance(att, dict):
-                                            if isinstance(att.get("content"), str) and att.get("type") in ("text", "document"):
-                                                if len(att.get("content")) > len(contract_text):
-                                                    contract_text = att.get("content")
-                                                    logger.info(f"/v1/chat/completions: extracted from message.attachments.content, len={len(contract_text)}")
-                                            elif isinstance(att.get("data"), str) and str(att.get("mime")).startswith("text"):
-                                                if len(att.get("data")) > len(contract_text):
-                                                    contract_text = att.get("data")
-                                                    logger.info(f"/v1/chat/completions: extracted from message.attachments.data, len={len(contract_text)}")
-                                    except Exception:
-                                        continue
+                                    candidate = extract_from_attachment(att, contract_text)
+                                    if candidate:
+                                        contract_text = candidate
                 except Exception:
                     pass
 
