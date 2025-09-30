@@ -6,8 +6,14 @@
 import json
 import logging
 from typing import Dict, Any
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
+try:
+    # Pydantic v2
+    from pydantic import ConfigDict
+    HAS_CONFIGDICT = True
+except Exception:
+    HAS_CONFIGDICT = False
 import requests
 import os
 
@@ -23,6 +29,12 @@ LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "")
 PROMPTS_FILE = os.getenv("PROMPTS_FILE", "/app/contract_prompts.json")
 
+# Ранняя валидация критичных переменных окружения
+if not LLM_API_URL:
+    logger.error("ENV LLM_API_URL is empty — внешний LLM API недоступен до корректной настройки")
+if not LLM_API_KEY:
+    logger.error("ENV LLM_API_KEY is empty — авторизация к внешнему LLM невозможна")
+
 class ContractRequest(BaseModel):
     contract_text: str
     user_prompt: str = ""
@@ -31,6 +43,41 @@ class ContractResponse(BaseModel):
     category: str
     validation_result: str
     is_valid: bool
+
+
+# -------- OpenAI-compatible schemas (minimal) --------
+class ChatMessage(BaseModel):
+    role: str
+    content: Any  # Может быть строкой или списком частей (OpenAI content parts)
+
+
+class ChatCompletionsRequest(BaseModel):
+    model: str | None = None
+    messages: list[ChatMessage]
+    max_tokens: int | None = None
+    temperature: float | None = None
+    # Разрешаем дополнительные поля (attachments, contract_text и т.п.)
+    if HAS_CONFIGDICT:
+        model_config = ConfigDict(extra="allow")
+
+
+class ChatChoiceMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatChoice(BaseModel):
+    index: int
+    message: ChatChoiceMessage
+    finish_reason: str = "stop"
+
+
+class ChatCompletionsResponse(BaseModel):
+    id: str
+    object: str = "chat.completion"
+    created: int
+    model: str
+    choices: list[ChatChoice]
 
 class LLMClient:
     """Клиент для работы с LLM API"""
@@ -47,6 +94,7 @@ class LLMClient:
     def generate_response(self, prompt: str) -> str:
         """Генерирует ответ от LLM"""
         try:
+            logger.info(f"LLM request using model='{self.model}', prompt_len={len(prompt)}")
             payload = {
                 "model": self.model,
                 "messages": [
@@ -65,6 +113,7 @@ class LLMClient:
             
             if response.status_code == 200:
                 result = response.json()
+                logger.info("LLM response: success")
                 return result["choices"][0]["message"]["content"]
             else:
                 logger.error(f"LLM API error: {response.status_code} - {response.text}")
@@ -75,13 +124,14 @@ class LLMClient:
             raise HTTPException(status_code=500, detail="Request failed")
 
 class ContractChecker:
-    """Основной класс для проверки договоров"""
-    
+    """Основной класс для проверки договоров (один запрос к модели)"""
+
     def __init__(self):
         self.llm_client = LLMClient(LLM_API_URL, LLM_API_KEY, LLM_MODEL)
         self.prompts = self._load_prompts()
-        self.category_mapping = self._build_category_mapping()
-    
+        # Маппинг display_name -> json_key для устойчивого сопоставления ответа модели
+        self.display_to_key = self._build_display_mapping()
+
     def _load_prompts(self) -> Dict[str, Any]:
         """Загружает промты из JSON файла"""
         try:
@@ -93,119 +143,36 @@ class ContractChecker:
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in prompts file: {e}")
             return {"categories": {}}
-    
-    def _build_category_mapping(self) -> Dict[str, str]:
-        """Создает маппинг отображаемых имен на ключи JSON"""
-        mapping = {}
+
+    def _build_display_mapping(self) -> Dict[str, str]:
+        mapping: Dict[str, str] = {}
         categories = self.prompts.get("categories", {})
-        
-        for json_key, category_data in categories.items():
-            if isinstance(category_data, dict) and "display_name" in category_data:
-                display_name = category_data["display_name"]
-                mapping[display_name.lower()] = json_key
-            elif isinstance(category_data, str):
-                # Если категория - просто строка, используем её как отображаемое имя
-                mapping[category_data.lower()] = json_key
-        
-        logger.info(f"Создан маппинг категорий: {len(mapping)} элементов")
+        for key, data in categories.items():
+            if isinstance(data, dict) and isinstance(data.get("display_name"), str):
+                mapping[data["display_name"].strip().lower()] = key
+        logger.info(f"Display mapping size: {len(mapping)}")
         return mapping
-    
-    def categorize_contract(self, contract_text: str) -> str:
-        """Определяет категорию договора"""
-        try:
-            # Проверяем наличие категорий
-            if not self.prompts.get("categories"):
-                logger.error("No categories found in prompts")
-                return None
-            
-            categories = list(self.prompts["categories"].keys())
-            
-            # Создаём промт для категоризации на основе загруженных категорий
-            categories_data = self.prompts.get("categories", {})
-            categories_list = ", ".join([
-                item.get("display_name", item) if isinstance(item, dict) else item
-                for item in categories_data.values()
-                if item  # Фильтруем пустые значения
-            ])
-            
-            # Fallback если JSON поврежден или пуст
-            if not categories_list:
-                logger.warning("Не удалось извлечь категории из JSON, используем пустой список")
-                categories_list = ""
-            
-            prompt = f"""Определи категорию договора из следующего списка: {categories_list}
 
-Текст договора: {contract_text}
-
-Ответь ТОЛЬКО названием категории из списка выше и так, как в списке выше - с сохранением орфографии и регистра."""
-            
-            response = self.llm_client.generate_response(prompt)
-            
-            # Ищем совпадение с предварительно созданным маппингом
-            response_clean = response.strip().lower()
-            if response_clean in self.category_mapping:
-                json_key = self.category_mapping[response_clean]
-                if json_key in categories:
-                    logger.info(f"Определена категория: {json_key}")
-                    return json_key
-            
-            # Если категория не найдена в маппинге - возвращаем None
-            logger.warning(f"Category not found in mapping: {response}")
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error in categorization: {e}")
-            return None
-    
-    def validate_contract(self, contract_text: str, category: str) -> str:
-        """Проверяет договор на соответствие требованиям"""
-        try:
-            if category not in self.prompts.get("categories", {}):
-                raise ValueError(f"Unknown category: {category}")
-            
-            validation_prompt = self.prompts["categories"][category]["validation_prompt"]
-            prompt = validation_prompt.format(contract_text=contract_text)
-            
-            return self.llm_client.generate_response(prompt)
-            
-        except Exception as e:
-            logger.error(f"Error in validation: {e}")
-            return f"Ошибка при проверке договора: {str(e)}"
-    
     def check_contract(self, contract_text: str, user_prompt: str = "") -> ContractResponse:
-        """Основной метод проверки договора"""
+        """Прозрачная прокладка: один запрос к модели и возврат её ответа как есть."""
         try:
-            logger.info("Начинаем проверку договора")
-            
-            # 1. Категоризация
-            category = self.categorize_contract(contract_text)
-            
-            # Если категория не найдена в JSON - возвращаем сообщение о неподдерживаемом типе
-            if category is None:
-                logger.info("Категория не найдена в поддерживаемых типах")
-                return ContractResponse(
-                    category="unsupported",
-                    validation_result="Ваш тип договора на данный момент не поддерживается",
-                    is_valid=False
-                )
-            
-            logger.info(f"Определена категория: {category}")
-            
-            # 2. Валидация для найденной категории
-            validation_result = self.validate_contract(contract_text, category)
-            logger.info("Валидация завершена")
-            
-            # 3. Определяем, валиден ли договор (простая эвристика)
-            is_valid = "нарушений" not in validation_result.lower() and "ошибок" not in validation_result.lower()
-            
-            return ContractResponse(
-                category=category,
-                validation_result=validation_result,
-                is_valid=is_valid
+            logger.info("Начинаем проверку договора (passthrough)")
+            instruction = (
+                "Проведи юридический анализ текста договора: выяви риски, несоответствия закону, пробелы, "
+                "неоднозначные формулировки, рекомендации по исправлению и краткий итог. Ответ верни простым текстом."
             )
-            
+            master_prompt = f"{instruction}\n\nТекст договора:\n{contract_text}"
+
+            llm_output = self.llm_client.generate_response(master_prompt)
+            validation_result = (llm_output or "").strip()
+
+            return ContractResponse(
+                category="passthrough",
+                validation_result=validation_result,
+                is_valid=False,
+            )
         except Exception as e:
-            logger.error(f"Error in check_contract: {e}")
+            logger.error(f"Error in check_contract(single-pass): {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
 # Инициализация
@@ -215,6 +182,22 @@ contract_checker = ContractChecker()
 async def health_check():
     """Проверка здоровья сервиса"""
     return {"status": "healthy", "service": "check_contract"}
+
+@app.get("/v1/models")
+@app.get("/models")
+async def list_models():
+    """Минимальный список моделей для OpenAI-совместимого клиента (OpenWebUI)."""
+    return {
+        "object": "list",
+        "data": [
+            {
+                "id": "check-contract",
+                "object": "model",
+                "created": 0,
+                "owned_by": "local",
+            }
+        ],
+    }
 
 @app.post("/check", response_model=ContractResponse)
 async def check_contract(request: ContractRequest):
@@ -243,6 +226,218 @@ async def check_contract(request: ContractRequest):
         raise
     except Exception as e:
         logger.error(f"Error in /check endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/v1/chat/completions", response_model=ChatCompletionsResponse)
+@app.post("/chat/completions", response_model=ChatCompletionsResponse)
+async def chat_completions(body: ChatCompletionsRequest, request: Request):
+    """OpenAI-совместимая обертка. Извлекает текст из сообщений и возвращает результат проверки."""
+    try:
+        logger.info(f"/v1/chat/completions: model='{body.model}', messages={len(body.messages)}")
+        # Полный дамп входного json (без чувствительных данных) для извлечения дополнительных полей
+        try:
+            raw_payload: dict[str, Any] = body.model_dump()  # pydantic v2
+        except Exception:
+            try:
+                raw_payload = body.dict()  # pydantic v1 fallback
+            except Exception:
+                raw_payload = {}
+        # Будем собирать JSON-части вида {"type":"input_json","json":{...}}
+        captured_json_parts: list[dict[str, Any]] = []
+
+        # Нормализатор контента: извлекает текст из строки или массива частей
+        def normalize_content(raw: Any) -> str:
+            try:
+                if raw is None:
+                    return ""
+                if isinstance(raw, str):
+                    return raw
+                if isinstance(raw, list):
+                    parts: list[str] = []
+                    for item in raw:
+                        if isinstance(item, dict):
+                            item_type = item.get("type")
+                            # Стандарт OpenAI: {type: "text", text: "..."} и {type: "input_text", text: "..."}
+                            if item_type in ("text", "input_text") and isinstance(item.get("text"), str):
+                                parts.append(item.get("text", ""))
+                            # Поддержка {type:"input_json", json:{...}}
+                            elif item_type == "input_json" and isinstance(item.get("json"), dict):
+                                captured_json_parts.append(item.get("json"))
+                                try:
+                                    parts.append(json.dumps(item.get("json"), ensure_ascii=False))
+                                except Exception:
+                                    pass
+                            # Некоторые клиенты кладут "content" вместо text
+                            elif isinstance(item.get("content"), str):
+                                parts.append(item.get("content", ""))
+                        elif isinstance(item, str):
+                            parts.append(item)
+                    return "\n\n".join([p for p in parts if p])
+                if isinstance(raw, dict):
+                    # Единичный объект input_json
+                    if raw.get("type") == "input_json" and isinstance(raw.get("json"), dict):
+                        captured_json_parts.append(raw.get("json"))
+                        try:
+                            return json.dumps(raw.get("json"), ensure_ascii=False)
+                        except Exception:
+                            return ""
+                    # Нетривиальные клиенты
+                    if isinstance(raw.get("text"), str):
+                        return raw.get("text", "")
+                    if isinstance(raw.get("content"), str):
+                        return raw.get("content", "")
+                return str(raw)
+            except Exception:
+                return ""
+
+        # Сливаем все пользовательские сообщения в один текст (для совместимости с простыми клиентами)
+        user_messages = [m for m in body.messages if m.role == "user" and m.content]
+        if not user_messages:
+            raise HTTPException(status_code=400, detail="No user message provided")
+
+        concatenated_user_text = "\n\n".join([
+            normalize_content(m.content).strip() for m in user_messages if normalize_content(m.content).strip()
+        ])
+        content = concatenated_user_text
+        logger.info(f"/v1/chat/completions: combined_user_text_len={len(content)}")
+
+        # Дополнительно: ищем самый длинный текст среди ВСЕХ сообщений (любой роли)
+        longest_text = content
+        longest_len = len(longest_text)
+        for msg in body.messages:
+            try:
+                txt = normalize_content(msg.content).strip()
+                if txt and len(txt) > longest_len:
+                    longest_text = txt
+                    longest_len = len(txt)
+            except Exception:
+                continue
+
+        # Пытаемся распарсить JSON c полями contract_text/user_prompt, иначе воспринимаем весь контент как текст договора
+        contract_text = content
+        user_prompt = ""
+        parsed_from_text = False
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, dict) and parsed.get("contract_text"):
+                contract_text = str(parsed.get("contract_text") or "").strip()
+                user_prompt = str(parsed.get("user_prompt") or "").strip()
+                parsed_from_text = True
+                logger.info(f"/v1/chat/completions: detected JSON payload in text, contract_len={len(contract_text)}, user_prompt_len={len(user_prompt)}")
+        except json.JSONDecodeError:
+            logger.info("/v1/chat/completions: text is not JSON")
+
+        # Если не удалось распарсить из текста, пробуем достать из input_json частей
+        if not parsed_from_text and captured_json_parts:
+            for obj in captured_json_parts:
+                if isinstance(obj, dict) and obj.get("contract_text"):
+                    contract_text = str(obj.get("contract_text") or "").strip()
+                    user_prompt = str(obj.get("user_prompt") or "").strip()
+                    logger.info(f"/v1/chat/completions: detected input_json part, contract_len={len(contract_text)}, user_prompt_len={len(user_prompt)}")
+                    break
+
+        # Если всё ещё нет текста — пробуем извлечь из root-полей (attachments/contract_text)
+        if not contract_text or len(contract_text) < 30:
+            # contract_text на корневом уровне
+            if isinstance(raw_payload.get("contract_text"), str) and raw_payload.get("contract_text").strip():
+                contract_text = raw_payload.get("contract_text").strip()
+                user_prompt = str(raw_payload.get("user_prompt") or "").strip()
+                logger.info(f"/v1/chat/completions: detected root contract_text, contract_len={len(contract_text)}, user_prompt_len={len(user_prompt)}")
+            # attachments
+            elif isinstance(raw_payload.get("attachments"), list):
+                for att in raw_payload.get("attachments"):
+                    try:
+                        # Частые варианты: {type:"text", content:"..."} или {mime:"text/plain", data:"..."}
+                        if isinstance(att, dict):
+                            if isinstance(att.get("content"), str) and att.get("type") in ("text", "document"):
+                                if len(att.get("content")) > len(contract_text):
+                                    contract_text = att.get("content")
+                                    logger.info(f"/v1/chat/completions: extracted from attachments.content, len={len(contract_text)}")
+                            elif isinstance(att.get("data"), str) and str(att.get("mime")).startswith("text"):
+                                if len(att.get("data")) > len(contract_text):
+                                    contract_text = att.get("data")
+                                    logger.info(f"/v1/chat/completions: extracted from attachments.data, len={len(contract_text)}")
+                    except Exception:
+                        continue
+            # Поиск вложенного contract_text в любых словарях сообщений
+            if (not contract_text or len(contract_text) < 30) and body.messages:
+                # просматриваем все сообщения (любой роли), чтобы повторные вызовы тоже подхватывали текст из истории
+                for m in body.messages:
+                    try:
+                        if isinstance(m.content, list):
+                            for part in m.content:
+                                if isinstance(part, dict) and part.get("contract_text"):
+                                    candidate = str(part.get("contract_text") or "").strip()
+                                    if len(candidate) > len(contract_text):
+                                        contract_text = candidate
+                                        user_prompt = str(part.get("user_prompt") or "").strip()
+                                        logger.info(f"/v1/chat/completions: found nested contract_text in message part, len={len(contract_text)}")
+                        elif isinstance(m.content, dict) and m.content.get("contract_text"):
+                            candidate = str(m.content.get("contract_text") or "").strip()
+                            if len(candidate) > len(contract_text):
+                                contract_text = candidate
+                                user_prompt = str(m.content.get("user_prompt") or "").strip()
+                                logger.info(f"/v1/chat/completions: found nested contract_text in message dict, len={len(contract_text)}")
+                    except Exception:
+                        continue
+
+                # Также пытаемся извлечь из attachments на уровне каждого сообщения (через raw_payload)
+                try:
+                    messages_raw = raw_payload.get("messages") if isinstance(raw_payload, dict) else None
+                    if isinstance(messages_raw, list):
+                        for rm in messages_raw:
+                            if not isinstance(rm, dict):
+                                continue
+                            atts = rm.get("attachments")
+                            if isinstance(atts, list):
+                                for att in atts:
+                                    try:
+                                        if isinstance(att, dict):
+                                            if isinstance(att.get("content"), str) and att.get("type") in ("text", "document"):
+                                                if len(att.get("content")) > len(contract_text):
+                                                    contract_text = att.get("content")
+                                                    logger.info(f"/v1/chat/completions: extracted from message.attachments.content, len={len(contract_text)}")
+                                            elif isinstance(att.get("data"), str) and str(att.get("mime")).startswith("text"):
+                                                if len(att.get("data")) > len(contract_text):
+                                                    contract_text = att.get("data")
+                                                    logger.info(f"/v1/chat/completions: extracted from message.attachments.data, len={len(contract_text)}")
+                                    except Exception:
+                                        continue
+                except Exception:
+                    pass
+
+        # Если по-прежнему коротко — подставим самый длинный найденный свободный текст из истории
+        if (not contract_text or len(contract_text) < 30) and longest_len >= 100:
+            contract_text = longest_text
+            logger.info(f"/v1/chat/completions: fallback to longest message text, len={len(contract_text)}")
+
+        if not contract_text:
+            raise HTTPException(status_code=400, detail="contract_text is empty")
+
+        logger.info(f"/v1/chat/completions: contract_text_len={len(contract_text)}")
+        result = contract_checker.check_contract(contract_text=contract_text, user_prompt=user_prompt)
+
+        # Формируем OpenAI-совместимый ответ
+        now_ts = int(__import__("time").time())
+        response = ChatCompletionsResponse(
+            id=f"chatcmpl_{now_ts}",
+            created=now_ts,
+            model=body.model or "check-contract",
+            choices=[
+                ChatChoice(
+                    index=0,
+                    message=ChatChoiceMessage(
+                        role="assistant",
+                        content=result.validation_result,
+                    ),
+                )
+            ],
+        )
+        return response
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in /v1/chat/completions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/categories")
