@@ -1,0 +1,12 @@
+# Не копировать в контейнер
+.env
+.git
+.gitignore
+*.md
+data/
+*.log
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+

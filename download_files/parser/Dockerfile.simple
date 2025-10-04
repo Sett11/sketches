@@ -1,0 +1,38 @@
+# УПРОЩЁННЫЙ Dockerfile для парсера (используйте если основной не собирается)
+# Использование: docker build -f Dockerfile.simple -t download_files-parser .
+
+FROM selenium/standalone-chrome:latest
+
+USER root
+
+# Установка Python
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3-pip \
+    python3.11-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Создание символической ссылки
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python
+
+# Рабочая директория
+WORKDIR /app
+
+# Копирование requirements и установка зависимостей
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Копирование кода парсера
+COPY . .
+
+# Создание директорий для данных
+RUN mkdir -p /app/data/metadata /app/data/pdfs /app/data/state /app/data/logs
+
+# Переменные окружения для Chrome
+ENV DISPLAY=:99
+ENV CHROME_BIN=/usr/bin/google-chrome
+ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
+
+# Запуск парсера
+CMD ["python", "main.py"]
+
