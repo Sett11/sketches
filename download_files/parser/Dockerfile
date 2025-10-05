@@ -36,17 +36,27 @@ RUN wget -q -O /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-
     && rm /tmp/google-chrome.deb \
     && rm -rf /var/lib/apt/lists/*
 
-# Установка ChromeDriver (упрощённый надёжный метод)
-RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d '.' -f 1) \
-    && echo "Chrome major version: $CHROME_VERSION" \
-    && wget -q -O /tmp/chromedriver-linux64.zip "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}.0.6723.58/linux64/chromedriver-linux64.zip" || \
-       wget -q -O /tmp/chromedriver-linux64.zip "https://storage.googleapis.com/chrome-for-testing-public/131.0.6778.87/linux64/chromedriver-linux64.zip" || \
-       wget -q -O /tmp/chromedriver-linux64.zip "https://storage.googleapis.com/chrome-for-testing-public/130.0.6723.91/linux64/chromedriver-linux64.zip" \
+# Установка ChromeDriver (автоматическое определение версии)
+RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}') \
+    && echo "Chrome version: $CHROME_VERSION" \
+    && CHROME_MAJOR=$(echo $CHROME_VERSION | cut -d '.' -f 1) \
+    && echo "Chrome major version: $CHROME_MAJOR" \
+    && CHROME_MINOR=$(echo $CHROME_VERSION | cut -d '.' -f 2) \
+    && echo "Chrome minor version: $CHROME_MINOR" \
+    && CHROME_PATCH=$(echo $CHROME_VERSION | cut -d '.' -f 3) \
+    && echo "Chrome patch version: $CHROME_PATCH" \
+    && CHROMEDRIVER_VERSION="${CHROME_MAJOR}.${CHROME_MINOR}.${CHROME_PATCH}.0" \
+    && echo "Looking for ChromeDriver version: $CHROMEDRIVER_VERSION" \
+    && wget -q -O /tmp/chromedriver-linux64.zip "https://storage.googleapis.com/chrome-for-testing-public/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip" || \
+       (echo "Exact version not found, trying latest for major version $CHROME_MAJOR" && \
+        wget -q -O /tmp/chromedriver-linux64.zip "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_MAJOR}.0.0.0/linux64/chromedriver-linux64.zip") || \
+       (echo "Fallback to version 131" && \
+        wget -q -O /tmp/chromedriver-linux64.zip "https://storage.googleapis.com/chrome-for-testing-public/131.0.6778.87/linux64/chromedriver-linux64.zip") \
     && unzip -q /tmp/chromedriver-linux64.zip -d /tmp/ \
     && mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
     && rm -rf /tmp/chromedriver* \
     && chmod +x /usr/local/bin/chromedriver \
-    && chromedriver --version || echo "ChromeDriver установлен"
+    && chromedriver --version
 
 # Рабочая директория
 WORKDIR /app

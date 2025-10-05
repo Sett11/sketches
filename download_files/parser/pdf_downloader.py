@@ -80,11 +80,14 @@ class PDFDownloader:
         
         # Настройки для автоматического скачивания PDF
         prefs = {
-            "download.default_directory": self.download_dir,
+            "download.default_directory": str(self.download_dir),
             "download.prompt_for_download": False,
             "download.directory_upgrade": True,
             "safebrowsing.enabled": True,
             "plugins.always_open_pdf_externally": True,
+            # Настройки кодировки для русских символов
+            "intl.accept_languages": "ru-RU,ru,en-US,en",
+            "profile.default_content_setting_values.notifications": 2,
         }
         options.add_experimental_option("prefs", prefs)
         
@@ -100,7 +103,7 @@ class PDFDownloader:
             # Настройки CDP для скачивания
             driver.execute_cdp_cmd("Page.setDownloadBehavior", {
                 "behavior": "allow",
-                "downloadPath": self.download_dir
+                "downloadPath": str(self.download_dir)
             })
             
             # Дополнительные HTTP заголовки
@@ -169,8 +172,8 @@ class PDFDownloader:
         stable_ticks = 0
         
         while time.time() - start < timeout:
-            # Проверяем наличие .crdownload файлов
-            crdownloads = glob.glob(os.path.join(self.download_dir, "*.crdownload"))
+            # Проверяем наличие .crdownload файлов (включая подпапки)
+            crdownloads = glob.glob(os.path.join(self.download_dir, "**", "*.crdownload"), recursive=True)
             
             if crdownloads:
                 # Проверяем, не зависло ли скачивание
@@ -192,15 +195,65 @@ class PDFDownloader:
                 time.sleep(0.5)
                 continue
             
-            # Нет .crdownload - ищем свежий PDF
-            pdf_files = [
-                p for p in Path(self.download_dir).glob("*.pdf") 
+            # Нет .crdownload - ищем свежий PDF (включая подпапки и системные директории)
+            pdf_files = []
+            
+            # Ищем в целевой директории
+            pdf_files.extend([
+                p for p in Path(self.download_dir).rglob("*.pdf") 
                 if p.stat().st_mtime >= start - 2
+            ])
+            
+            # Ищем в системных временных директориях Chrome
+            import tempfile
+            temp_dirs = [
+                Path(tempfile.gettempdir()),
+                Path("/tmp"),
+                Path("/var/tmp"),
+                Path("/root/Downloads"),
+                Path("/app/data/pdfs"),
+                Path("/app/data")
             ]
+            
+            for temp_dir in temp_dirs:
+                if temp_dir.exists():
+                    pdf_files.extend([
+                        p for p in temp_dir.rglob("*.pdf") 
+                        if p.stat().st_mtime >= start - 2
+                    ])
             
             if pdf_files:
                 latest = max(pdf_files, key=lambda p: p.stat().st_mtime)
                 logger.info(f"Файл скачан: {latest.name}")
+                logger.info(f"Найденный файл: {latest}")
+                logger.info(f"Целевая директория: {self.download_dir}")
+                
+                # Принудительно перемещаем файл в целевую директорию
+                # Обрабатываем русские символы в имени файла
+                safe_filename = self._sanitize_filename(latest.name)
+                target_path = Path(self.download_dir) / safe_filename
+                logger.info(f"Целевой путь: {target_path}")
+                if latest != target_path:
+                    try:
+                        # Создаём целевую директорию если её нет
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # Перемещаем файл
+                        latest.rename(target_path)
+                        logger.info(f"Файл перемещён в: {target_path}")
+                        return str(target_path)
+                    except Exception as e:
+                        logger.error(f"Ошибка перемещения файла: {e}")
+                        # Если не удалось переместить, копируем
+                        try:
+                            import shutil
+                            shutil.copy2(latest, target_path)
+                            logger.info(f"Файл скопирован в: {target_path}")
+                            return str(target_path)
+                        except Exception as e2:
+                            logger.error(f"Ошибка копирования файла: {e2}")
+                            return str(latest)
+                
                 return str(latest)
             
             time.sleep(0.5)
@@ -212,6 +265,27 @@ class PDFDownloader:
         """Безопасная пауза с джиттером"""
         delay = max(0, self.base_delay + random.uniform(-self.jitter, self.jitter))
         time.sleep(delay)
+    
+    def _sanitize_filename(self, filename: str) -> str:
+        """Обработка русских символов в имени файла"""
+        import unicodedata
+        import re
+        
+        # Нормализуем Unicode
+        filename = unicodedata.normalize('NFC', filename)
+        
+        # Заменяем недопустимые символы
+        filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+        
+        # Убираем лишние пробелы и точки
+        filename = filename.strip('. ')
+        
+        # Ограничиваем длину
+        if len(filename) > 200:
+            name, ext = os.path.splitext(filename)
+            filename = name[:200-len(ext)] + ext
+        
+        return filename
     
     def _prewarm(self):
         """Прогрев - открытие главной страницы для имитации активности"""
@@ -248,23 +322,29 @@ class PDFDownloader:
             try:
                 logger.debug(f"Попытка {attempt}/{self.retry_limit}: {url}")
                 
-                # Запускаем скачивание
-                self.driver.get(url)
+                # Запускаем скачивание (обрабатываем русские символы в URL)
+                try:
+                    # Кодируем URL для правильной обработки русских символов
+                    import urllib.parse
+                    encoded_url = urllib.parse.quote(url, safe=':/?#[]@!$&\'()*+,;=')
+                    self.driver.get(encoded_url)
+                except Exception as e:
+                    logger.warning(f"Ошибка кодирования URL, используем оригинал: {e}")
+                    self.driver.get(url)
+                
                 time.sleep(1.5)  # Даём сети стартануть
                 
                 # Ожидаем завершения скачивания
                 downloaded_file = self._wait_download_finished()
                 
                 if downloaded_file:
-                    # Переименовываем файл
-                    new_filename = f"{case_number}.pdf"
-                    new_path = os.path.join(self.download_dir, new_filename)
-                    
-                    # Если файл уже существует, удаляем старый
-                    if os.path.exists(new_path):
-                        os.remove(new_path)
-                    
-                    os.rename(downloaded_file, new_path)
+                    # Файл уже скачан в правильную директорию, просто проверяем его существование
+                    if os.path.exists(downloaded_file):
+                        logger.info(f"✓ Файл успешно скачан: {os.path.basename(downloaded_file)}")
+                        return downloaded_file
+                    else:
+                        logger.error(f"Скачанный файл не найден: {downloaded_file}")
+                        return None
                     
                     self.files_downloaded += 1
                     logger.info(f"✓ Скачан: {case_number} ({self.files_downloaded} файлов)")
@@ -278,7 +358,7 @@ class PDFDownloader:
                         logger.info(f"Длинная пауза: {extra:.1f}s")
                         time.sleep(extra)
                     
-                    return new_path
+                    return downloaded_file
                 
                 else:
                     logger.warning(f"Не удалось скачать файл (попытка {attempt})")
