@@ -31,5 +31,6 @@ docs
 new_docs
 logs
 
+DCV/
 .cursorignore
-.cursorrules
+.cursor/
