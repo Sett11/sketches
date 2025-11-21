@@ -1,0 +1,85 @@
+use anyhow::Result;
+use dc_core::models::{Location, SchemaReference, SchemaType};
+use swc_ecma_ast::{Callee, CallExpr, Expr, MemberProp};
+
+/// Извлекатель Zod схем из TypeScript кода
+pub struct ZodExtractor;
+
+impl ZodExtractor {
+    /// Создает новый экстрактор
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Извлекает Zod схему из AST узла
+    pub fn extract_schema(&self, node: &Expr, file_path: &str, line: usize) -> Option<SchemaReference> {
+        // Ищем вызовы z.object(), z.string(), и т.д.
+        if let Expr::Call(call_expr) = node {
+            if let Callee::Expr(callee_expr) = &call_expr.callee {
+                // Проверяем, является ли это вызовом z.object() или подобным
+                if self.is_zod_call(callee_expr) {
+                    // Извлекаем имя схемы из контекста или создаем дефолтное
+                    let schema_name = self.extract_schema_name(call_expr);
+                    
+                    return Some(SchemaReference {
+                        name: schema_name,
+                        schema_type: SchemaType::Zod,
+                        location: Location {
+                            file: file_path.to_string(),
+                            line,
+                            column: None,
+                        },
+                        metadata: std::collections::HashMap::new(),
+                    });
+                }
+            }
+        }
+        None
+    }
+
+    /// Проверяет, является ли выражение вызовом Zod (z.object, z.string и т.д.)
+    fn is_zod_call(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::Member(member_expr) => {
+                if let Expr::Ident(ident) = member_expr.obj.as_ref() {
+                    if ident.sym.as_ref() == "z" {
+                        // Проверяем методы Zod
+                        if let MemberProp::Ident(prop) = &member_expr.prop {
+                            let method = prop.sym.as_ref();
+                            return method == "object"
+                                || method == "string"
+                                || method == "number"
+                                || method == "boolean"
+                                || method == "array";
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        false
+    }
+
+    /// Извлекает имя схемы из вызова
+    fn extract_schema_name(&self, call_expr: &CallExpr) -> String {
+        // Пытаемся найти имя переменной, которой присваивается схема
+        // Пока возвращаем дефолтное имя
+        "ZodSchema".to_string()
+    }
+
+    /// Преобразует Zod схему в SchemaReference
+    pub fn zod_to_schema(&self, zod_schema: &str, location: Location) -> SchemaReference {
+        SchemaReference {
+            name: zod_schema.to_string(),
+            schema_type: SchemaType::Zod,
+            location,
+            metadata: std::collections::HashMap::new(),
+        }
+    }
+}
+
+impl Default for ZodExtractor {
+    fn default() -> Self {
+        Self::new()
+    }
+}

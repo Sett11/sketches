@@ -1,0 +1,18 @@
+[package]
+name = "dc-adapter-fastapi"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "dc_adapter_fastapi"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+dc-core = { path = "../dc-core" }
+pyo3 = { version = "0.22", features = ["auto-initialize"] }
+rustpython-parser = "0.3"
+serde.workspace = true
+anyhow.workspace = true
+

@@ -13,24 +13,26 @@ __pycache__/
 *.xls
 *.xlsx
 *.ipynb
-*.md
 *.jpg
 
-# Cookie files with secrets
-parser/cookies.json
-parser/config/cookies.json
-
-node_modules/
-
-venv
-docs/
-working_docs/
-new_docs/
 logs/
-docs
-new_docs
-logs
 
 DCV/
 .cursorignore
 .cursor/
+
+# Rust/Cargo build artifacts
+# Note: Cargo.lock is NOT ignored - it should be committed for binary projects to ensure reproducible builds
+target/
+
+# Python/maturin build artifacts
+dist/
+build/
+*.egg-info/
+*.egg-info
+*.so
+*.pyd
+*.dylib
+wheels/
+*.whl
+AUDIT_REPORT.md
