@@ -82,16 +82,33 @@ pub enum HttpMethod {
 }
 
 impl HttpMethod {
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_uppercase().as_str() {
-            "GET" => Some(HttpMethod::Get),
-            "POST" => Some(HttpMethod::Post),
-            "PUT" => Some(HttpMethod::Put),
-            "PATCH" => Some(HttpMethod::Patch),
-            "DELETE" => Some(HttpMethod::Delete),
-            "OPTIONS" => Some(HttpMethod::Options),
-            "HEAD" => Some(HttpMethod::Head),
-            _ => None,
+    /// Удобный метод для получения Option
+    pub fn from_str_opt(s: &str) -> Option<Self> {
+        s.parse().ok()
+    }
+}
+
+impl std::str::FromStr for HttpMethod {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Используем eq_ignore_ascii_case для избежания аллокации
+        if s.eq_ignore_ascii_case("GET") {
+            Ok(HttpMethod::Get)
+        } else if s.eq_ignore_ascii_case("POST") {
+            Ok(HttpMethod::Post)
+        } else if s.eq_ignore_ascii_case("PUT") {
+            Ok(HttpMethod::Put)
+        } else if s.eq_ignore_ascii_case("PATCH") {
+            Ok(HttpMethod::Patch)
+        } else if s.eq_ignore_ascii_case("DELETE") {
+            Ok(HttpMethod::Delete)
+        } else if s.eq_ignore_ascii_case("OPTIONS") {
+            Ok(HttpMethod::Options)
+        } else if s.eq_ignore_ascii_case("HEAD") {
+            Ok(HttpMethod::Head)
+        } else {
+            Err(())
         }
     }
 }

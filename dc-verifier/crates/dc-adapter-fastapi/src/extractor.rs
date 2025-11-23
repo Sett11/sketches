@@ -23,7 +23,10 @@ impl FastApiExtractor {
             let module_from_spec = importlib.getattr("module_from_spec")?;
 
             // Создаем spec из файла
-            let spec = spec_from_file.call1(("app", self.app_path.to_str()))?;
+            let app_path_str = self.app_path.to_str().ok_or_else(|| {
+                anyhow::anyhow!("App path contains invalid UTF-8: {:?}", self.app_path)
+            })?;
+            let spec = spec_from_file.call1(("app", app_path_str))?;
             let module = module_from_spec.call1((spec,))?;
 
             // Загружаем модуль

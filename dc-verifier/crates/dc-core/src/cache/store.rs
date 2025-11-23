@@ -35,17 +35,21 @@ impl CacheStore {
     }
 
     /// Сохраняет граф вызовов
-    pub fn save_graph(&self, graph_id: &str, graph: &CallGraph) -> Result<()> {
-        // TODO: Сериализовать граф и сохранить
-        let key = format!("graph:{}", graph_id);
-        // self.db.insert(key, serialized_graph)?;
-        Ok(())
+    /// 
+    /// Примечание: Реализация сериализации требует дополнительных зависимостей
+    /// (serde с поддержкой petgraph или bincode). Пока возвращаем ошибку.
+    pub fn save_graph(&self, _graph_id: &str, _graph: &CallGraph) -> Result<()> {
+        // TODO: Реализовать сериализацию CallGraph
+        // Для этого потребуется:
+        // 1. Добавить зависимость bincode или настроить serde для petgraph::Graph
+        // 2. Сериализовать граф: let serialized = bincode::serialize(graph)?;
+        // 3. Сохранить: self.db.insert(key, serialized)?;
+        anyhow::bail!("save_graph not implemented: requires serialization support for petgraph::Graph")
     }
 
     /// Загружает граф вызовов
-    pub fn load_graph(&self, graph_id: &str) -> Result<Option<CallGraph>> {
+    pub fn load_graph(&self, _graph_id: &str) -> Result<Option<CallGraph>> {
         // TODO: Загрузить и десериализовать граф
-        let key = format!("graph:{}", graph_id);
         // if let Some(data) = self.db.get(key)? {
         //     Ok(Some(deserialize_graph(data.as_ref())?))
         // } else {

@@ -134,7 +134,7 @@ impl<'a> ChainBuilder<'a> {
     fn create_links_from_nodes(
         &self,
         nodes: &[NodeId],
-        direction: ChainDirection,
+        _direction: ChainDirection,
     ) -> Result<Vec<Link>> {
         let total = nodes.len();
         nodes
@@ -142,26 +142,15 @@ impl<'a> ChainBuilder<'a> {
             .enumerate()
             .map(|(idx, node_id)| {
                 let mut link_type = self.determine_link_type(*node_id);
+                // Упрощенная логика без дублирования по direction
                 if total == 1 {
                     link_type = LinkType::Source;
-                } else {
-                    match direction {
-                        ChainDirection::FrontendToBackend => {
-                            if idx == 0 {
-                                link_type = LinkType::Source;
-                            } else if idx == total - 1 {
-                                link_type = LinkType::Sink;
-                            }
-                        }
-                        ChainDirection::BackendToFrontend => {
-                            if idx == 0 {
-                                link_type = LinkType::Source;
-                            } else if idx == total - 1 {
-                                link_type = LinkType::Sink;
-                            }
-                        }
-                    }
+                } else if idx == 0 {
+                    link_type = LinkType::Source;
+                } else if idx == total - 1 {
+                    link_type = LinkType::Sink;
                 }
+                // Иначе используем link_type из determine_link_type
                 self.create_link_from_node(*node_id, link_type)
             })
             .collect()

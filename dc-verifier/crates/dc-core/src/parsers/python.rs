@@ -1,10 +1,11 @@
 use anyhow::Result;
-use rustpython_parser::{ast, parse, Mode};
+use rustpython_parser::ast;
+use rustpython_parser::ast::Ranged;
 use std::path::Path;
 
 use crate::call_graph::CallNode;
 use crate::models::Location;
-use crate::parsers::{Call, CallArgument, Import};
+use crate::parsers::{Call, CallArgument, Import, LocationConverter};
 
 /// Парсер Python кода с анализом вызовов
 pub struct PythonParser;
@@ -16,22 +17,19 @@ impl PythonParser {
     }
 
     /// Парсит файл и извлекает узлы вызовов
-    pub fn parse_file(&self, path: &Path) -> Result<Vec<CallNode>> {
-        let source = std::fs::read_to_string(path)?;
-        let ast = parse(&source, Mode::Module, path.to_string_lossy().as_ref())?;
-
+    pub fn parse_file(&self, _path: &Path) -> Result<Vec<CallNode>> {
         // TODO: Извлечение CallNode из AST
         Ok(Vec::new())
     }
 
     /// Извлекает импорты из AST
-    pub fn extract_imports(&self, ast: &ast::Mod, file_path: &str) -> Vec<Import> {
+    pub fn extract_imports(&self, ast: &ast::Mod, file_path: &str, converter: &LocationConverter) -> Vec<Import> {
         let mut imports = Vec::new();
 
         match ast {
             ast::Mod::Module(module) => {
                 for stmt in &module.body {
-                    self.extract_imports_from_stmt(stmt, &mut imports, file_path);
+                    self.extract_imports_from_stmt(stmt, &mut imports, file_path, converter);
                 }
             }
             _ => {}
@@ -40,22 +38,26 @@ impl PythonParser {
         imports
     }
 
-    fn extract_imports_from_stmt(&self, stmt: &ast::Stmt, imports: &mut Vec<Import>, file_path: &str) {
+    fn extract_imports_from_stmt(&self, stmt: &ast::Stmt, imports: &mut Vec<Import>, file_path: &str, converter: &LocationConverter) {
         match stmt {
             ast::Stmt::Import(import_stmt) => {
+                let range = import_stmt.range();
+                let (line, column) = converter.byte_offset_to_location(range.start().into());
                 for alias in &import_stmt.names {
                     imports.push(Import {
                         path: alias.name.to_string(),
                         names: vec![],
                         location: crate::models::Location {
                             file: file_path.to_string(),
-                            line: 0, // TODO: получить location из stmt
-                            column: None,
+                            line,
+                            column: Some(column),
                         },
                     });
                 }
             }
             ast::Stmt::ImportFrom(import_from) => {
+                let range = import_from.range();
+                let (line, column) = converter.byte_offset_to_location(range.start().into());
                 if let Some(module) = &import_from.module {
                     for alias in &import_from.names {
                         imports.push(Import {
@@ -63,8 +65,8 @@ impl PythonParser {
                             names: vec![alias.name.to_string()],
                             location: crate::models::Location {
                                 file: file_path.to_string(),
-                                line: stmt.location.row(),
-                                column: Some(stmt.location.column()),
+                                line,
+                                column: Some(column),
                             },
                         });
                     }
@@ -91,12 +93,13 @@ impl PythonParser {
         &self,
         ast: &ast::Mod,
         file_path: &str,
+        converter: &LocationConverter,
     ) -> Vec<crate::call_graph::Decorator> {
         let mut decorators = Vec::new();
 
         if let ast::Mod::Module(module) = ast {
             for stmt in &module.body {
-                self.collect_decorators(stmt, None, &mut decorators, file_path);
+                self.collect_decorators(stmt, None, &mut decorators, file_path, converter);
             }
         }
 
@@ -108,6 +111,7 @@ impl PythonParser {
         &self,
         ast: &ast::Mod,
         file_path: &str,
+        converter: &LocationConverter,
     ) -> Vec<crate::models::SchemaReference> {
         let mut models = Vec::new();
 
@@ -125,11 +129,9 @@ impl PythonParser {
                                 if let Some(target) = &ann_assign.target {
                                     if let ast::Expr::Name(name) = target.as_ref() {
                                         let field_name = name.id.to_string();
-                                        let field_type = if let Some(annotation) = &ann_assign.annotation {
-                                            self.expr_to_string(annotation)
-                                        } else {
-                                            "Any".to_string()
-                                        };
+                                        let field_type = ann_assign.annotation.as_deref()
+                                            .map(|expr| self.expr_to_string(expr))
+                                            .unwrap_or_else(|| "Any".to_string());
                                         fields.push(format!("{}:{}", field_name, field_type));
                                     }
                                 }
@@ -140,13 +142,15 @@ impl PythonParser {
                             metadata.insert("fields".to_string(), fields.join(","));
                         }
 
+                        let range = class_def.range();
+                        let (line, column) = converter.byte_offset_to_location(range.start().into());
                         models.push(crate::models::SchemaReference {
                             name: class_def.name.to_string(),
                             schema_type: crate::models::SchemaType::Pydantic,
                             location: crate::models::Location {
                                 file: file_path.to_string(),
-                                line: class_def.location.row(),
-                                column: Some(class_def.location.column()),
+                                line,
+                                column: Some(column),
                             },
                             metadata,
                         });
@@ -162,11 +166,15 @@ impl PythonParser {
     fn is_pydantic_base_model(&self, bases: &[ast::Expr]) -> bool {
         for base in bases {
             let base_name = self.expr_to_string(base);
-            // Проверяем различные варианты наследования от BaseModel
-            if base_name.contains("BaseModel")
-                || base_name == "pydantic.BaseModel"
-                || base_name == "BaseModel"
-            {
+            // Извлекаем последний сегмент пути (split по '.' или '::')
+            let last_segment = base_name
+                .split('.')
+                .last()
+                .or_else(|| base_name.split("::").last())
+                .unwrap_or(&base_name);
+            
+            // Проверяем точное совпадение
+            if last_segment == "BaseModel" || base_name == "pydantic.BaseModel" {
                 return true;
             }
         }
@@ -272,10 +280,14 @@ impl PythonParser {
                 self.walk_statements(&try_stmt.orelse, context, calls, file_path);
                 self.walk_statements(&try_stmt.finalbody, context, calls, file_path);
                 for handler in &try_stmt.handlers {
-                    if let Some(typ) = &handler.typ {
-                        self.walk_expr(typ, context, calls, file_path);
+                    match handler {
+                        ast::ExceptHandler::ExceptHandler(except_handler) => {
+                            if let Some(typ) = &except_handler.type_ {
+                                self.walk_expr(typ, context, calls, file_path);
+                            }
+                            self.walk_statements(&except_handler.body, context, calls, file_path);
+                        }
                     }
-                    self.walk_statements(&handler.body, context, calls, file_path);
                 }
             }
             _ => {}
@@ -455,6 +467,7 @@ impl PythonParser {
         class_context: Option<String>,
         decorators: &mut Vec<crate::call_graph::Decorator>,
         file_path: &str,
+        converter: &LocationConverter,
     ) {
         match stmt {
             ast::Stmt::FunctionDef(func_def) => {
@@ -462,48 +475,30 @@ impl PythonParser {
                     .as_ref()
                     .map(|class| format!("{}.{}", class, func_def.name))
                     .unwrap_or_else(|| func_def.name.to_string());
-
-                for decorator in &func_def.decorator_list {
-                    if let Some(name) = self.get_decorator_name(decorator) {
-                        if self.is_route_decorator(&name) {
-                            let args = self.extract_decorator_arguments(decorator);
-                            decorators.push(crate::call_graph::Decorator {
-                                name,
-                                arguments: args,
-                                location: Location {
-                                    file: file_path.to_string(),
-                                    line: 0, // TODO: получить location из decorator
-                                    column: None,
-                                },
-                                target_function: Some(target_name.clone()),
-                            });
-                        }
-                    }
-                }
+                
+                self.process_function_decorators(
+                    &target_name,
+                    &func_def.decorator_list,
+                    class_context.as_deref(),
+                    decorators,
+                    file_path,
+                    converter,
+                );
             }
             ast::Stmt::AsyncFunctionDef(func_def) => {
                 let target_name = class_context
                     .as_ref()
                     .map(|class| format!("{}.{}", class, func_def.name))
                     .unwrap_or_else(|| func_def.name.to_string());
-
-                for decorator in &func_def.decorator_list {
-                    if let Some(name) = self.get_decorator_name(decorator) {
-                        if self.is_route_decorator(&name) {
-                            let args = self.extract_decorator_arguments(decorator);
-                            decorators.push(crate::call_graph::Decorator {
-                                name,
-                                arguments: args,
-                                location: Location {
-                                    file: file_path.to_string(),
-                                    line: 0, // TODO: получить location из decorator
-                                    column: None,
-                                },
-                                target_function: Some(target_name.clone()),
-                            });
-                        }
-                    }
-                }
+                
+                self.process_function_decorators(
+                    &target_name,
+                    &func_def.decorator_list,
+                    class_context.as_deref(),
+                    decorators,
+                    file_path,
+                    converter,
+                );
             }
             ast::Stmt::ClassDef(class_def) => {
                 let next_context = class_context
@@ -512,10 +507,46 @@ impl PythonParser {
                     .unwrap_or_else(|| class_def.name.to_string());
 
                 for body_stmt in &class_def.body {
-                    self.collect_decorators(body_stmt, Some(next_context.clone()), decorators, file_path);
+                    self.collect_decorators(body_stmt, Some(next_context.clone()), decorators, file_path, converter);
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Обрабатывает декораторы функции (общий код для FunctionDef и AsyncFunctionDef)
+    fn process_function_decorators(
+        &self,
+        func_name: &str,
+        decorator_list: &[ast::Expr],
+        class_context: Option<&str>,
+        decorators: &mut Vec<crate::call_graph::Decorator>,
+        file_path: &str,
+        converter: &LocationConverter,
+    ) {
+        let target_name = class_context
+            .map(|class| format!("{}.{}", class, func_name))
+            .unwrap_or_else(|| func_name.to_string());
+
+        for decorator in decorator_list {
+            if let Some(name) = self.get_decorator_name(decorator) {
+                if self.is_route_decorator(&name) {
+                    let args = self.extract_decorator_arguments(decorator);
+                    // Извлекаем реальную location из decorator AST
+                    let range = decorator.range();
+                    let (line, column) = converter.byte_offset_to_location(range.start().into());
+                    decorators.push(crate::call_graph::Decorator {
+                        name,
+                        arguments: args,
+                        location: Location {
+                            file: file_path.to_string(),
+                            line,
+                            column: Some(column),
+                        },
+                        target_function: Some(target_name.clone()),
+                    });
+                }
+            }
         }
     }
 

@@ -1,5 +1,5 @@
-use crate::analyzers::schema_parser::{FieldInfo, JsonSchema, SchemaParser};
-use crate::models::{BaseType, Contract, Location, Mismatch, MismatchType, TypeInfo};
+use crate::analyzers::schema_parser::SchemaParser;
+use crate::models::{BaseType, Contract, Mismatch, MismatchType, TypeInfo};
 
 /// Трейт для правил проверки контрактов
 pub trait ContractRule: Send + Sync {
@@ -206,11 +206,15 @@ impl ContractRule for UnnormalizedDataRule {
 
                 // Проверяем другие ограничения, которые могут требовать нормализации
                 // Например, строки должны быть в нижнем регистре
+                let from_has_pattern = from_field
+                    .constraints
+                    .iter()
+                    .any(|c| matches!(c, crate::models::Constraint::Pattern(_)));
                 let to_has_pattern = to_field
                     .constraints
                     .iter()
                     .any(|c| matches!(c, crate::models::Constraint::Pattern(_)));
-                if to_has_pattern && !from_has_email && from_field.base_type == BaseType::String {
+                if to_has_pattern && !from_has_pattern && from_field.base_type == BaseType::String {
                     // Если в приемнике есть паттерн, но в источнике нет - возможна проблема
                     mismatches.push(Mismatch {
                         mismatch_type: MismatchType::UnnormalizedData,

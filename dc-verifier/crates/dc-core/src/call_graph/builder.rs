@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 
 use crate::call_graph::{CallEdge, CallGraph, CallNode, HttpMethod, Parameter};
 use crate::call_graph::decorator::Decorator;
-use crate::models::{BaseType, Location, NodeId, TypeInfo};
-use crate::parsers::{Call, Import, PythonParser};
+use crate::models::{BaseType, NodeId, TypeInfo};
+use crate::parsers::{Call, Import, LocationConverter, PythonParser};
 
 /// Построитель графа вызовов - главный класс для создания графа из кода
 pub struct CallGraphBuilder {
@@ -83,15 +83,18 @@ impl CallGraphBuilder {
         )
         .with_context(|| format!("Failed to parse {:?}", normalized_entry))?;
 
+        // Создаем LocationConverter для точной конвертации байтовых смещений
+        let converter = LocationConverter::new(source);
+
         let module_node = self.get_or_create_module_node(&normalized_entry)?;
 
         self.processed_files.insert(normalized_entry.clone());
         self.entry_points.push(normalized_entry.clone());
 
-        self.process_imports(&ast, module_node, &normalized_entry)?;
+        self.process_imports(&ast, module_node, &normalized_entry, &converter)?;
         self.extract_functions_and_classes(&ast, &normalized_entry)?;
         self.process_calls(&ast, module_node, &normalized_entry)?;
-        self.process_decorators(&ast, &normalized_entry)?;
+        self.process_decorators(&ast, &normalized_entry, &converter)?;
 
         Ok(())
     }
@@ -256,9 +259,10 @@ impl CallGraphBuilder {
         module_ast: &ast::Mod,
         module_node: NodeId,
         file_path: &Path,
+        converter: &LocationConverter,
     ) -> Result<()> {
         let file_path_str = file_path.to_string_lossy().to_string();
-        let imports = self.parser.extract_imports(module_ast, &file_path_str);
+        let imports = self.parser.extract_imports(module_ast, &file_path_str, converter);
         for import in imports {
             if let Err(err) = self.process_import(module_node, &import, file_path) {
                 eprintln!(
@@ -386,8 +390,11 @@ impl CallGraphBuilder {
         file_path: &Path,
     ) -> Result<NodeId> {
         let mut parameters = self.convert_parameters(&func_def.args);
-        if !parameters.is_empty() {
-            // Удаляем self
+        // Проверяем декораторы перед удалением первого параметра
+        let has_staticmethod = self.has_decorator(&func_def.decorator_list, "staticmethod");
+        if !has_staticmethod && !parameters.is_empty() {
+            // Если нет @staticmethod, удаляем первый параметр (self или cls)
+            // Для @classmethod можно удалить cls, для обычных методов - self
             parameters.remove(0);
         }
 
@@ -412,7 +419,10 @@ impl CallGraphBuilder {
         file_path: &Path,
     ) -> Result<NodeId> {
         let mut parameters = self.convert_parameters(&func_def.args);
-        if !parameters.is_empty() {
+        // Проверяем декораторы перед удалением первого параметра
+        let has_staticmethod = self.has_decorator(&func_def.decorator_list, "staticmethod");
+        if !has_staticmethod && !parameters.is_empty() {
+            // Если нет @staticmethod, удаляем первый параметр (self или cls)
             parameters.remove(0);
         }
 
@@ -462,7 +472,7 @@ impl CallGraphBuilder {
             };
 
             if let Some(caller) = caller_node {
-                if let Err(err) = self.process_call(caller, call, file_path) {
+                if let Err(err) = self.process_call(caller, &call, file_path) {
                     eprintln!(
                         "Не удалось обработать вызов {} в {:?}: {}",
                         call.name, file_path, err
@@ -473,11 +483,11 @@ impl CallGraphBuilder {
         Ok(())
     }
 
-    fn process_decorators(&mut self, module_ast: &ast::Mod, file_path: &Path) -> Result<()> {
+    fn process_decorators(&mut self, module_ast: &ast::Mod, file_path: &Path, converter: &LocationConverter) -> Result<()> {
         let file_path_str = file_path.to_string_lossy().to_string();
-        let decorators = self.parser.extract_decorators(module_ast, &file_path_str);
+        let decorators = self.parser.extract_decorators(module_ast, &file_path_str, converter);
         for decorator in decorators {
-            if let Err(err) = self.process_decorator(decorator, file_path) {
+            if let Err(err) = self.process_decorator(&decorator, file_path) {
                 eprintln!(
                     "Не удалось обработать декоратор {} в {:?}: {}",
                     decorator.name, file_path, err
@@ -489,37 +499,99 @@ impl CallGraphBuilder {
 
     fn convert_parameters(&self, args: &ast::Arguments) -> Vec<Parameter> {
         let mut params = Vec::new();
+        
+        // posonlyargs, args, kwonlyargs - это Vec<ArgWithDefault>
+        // default уже хранится внутри каждого ArgWithDefault
+        
+        // Обрабатываем posonlyargs
         for arg in &args.posonlyargs {
-            params.push(self.create_parameter(arg));
+            params.push(self.create_parameter_from_arg_with_default(arg));
         }
+        
+        // Обрабатываем args
         for arg in &args.args {
-            params.push(self.create_parameter(arg));
+            params.push(self.create_parameter_from_arg_with_default(arg));
         }
+        
+        // Обрабатываем kwonlyargs
         for arg in &args.kwonlyargs {
-            params.push(self.create_parameter(arg));
+            params.push(self.create_parameter_from_arg_with_default(arg));
         }
+        
         if let Some(arg) = &args.vararg {
-            params.push(self.create_parameter(arg));
+            // vararg это Option<Box<Arg>>, без default
+            params.push(self.create_parameter_from_arg(arg, None));
         }
         if let Some(arg) = &args.kwarg {
-            params.push(self.create_parameter(arg));
+            // kwarg это Option<Box<Arg>>, без default
+            params.push(self.create_parameter_from_arg(arg, None));
         }
         params
     }
 
-    fn create_parameter(&self, arg: &ast::ArgWithDefault) -> Parameter {
+    /// Создает параметр из ArgWithDefault (с default)
+    fn create_parameter_from_arg_with_default(&self, arg: &ast::ArgWithDefault) -> Parameter {
+        let optional = arg.default.is_some();
+        let default_value = arg.default.as_deref().map(|expr| {
+            // Извлекаем текстовое представление выражения по умолчанию
+            match expr {
+                ast::Expr::Constant(constant) => match &constant.value {
+                    ast::Constant::Str(s) => format!("\"{}\"", s),
+                    ast::Constant::Int(i) => i.to_string(),
+                    ast::Constant::Float(f) => f.to_string(),
+                    ast::Constant::Bool(b) => b.to_string(),
+                    ast::Constant::None => "None".to_string(),
+                    _ => format!("{:?}", constant.value),
+                },
+                _ => format!("{:?}", expr),
+            }
+        });
+        
         Parameter {
             name: arg.def.arg.to_string(),
             type_info: TypeInfo {
                 base_type: BaseType::Unknown,
                 schema_ref: None,
                 constraints: Vec::new(),
-                optional: arg.def.annotation.is_none(),
+                optional,
             },
-            optional: arg.def.annotation.is_none(),
-            default_value: arg.default.as_ref().map(|_| "default".to_string()),
+            optional,
+            default_value,
         }
     }
+
+    /// Создает параметр из Arg (без default)
+    /// Принимает &Box<Arg>
+    fn create_parameter_from_arg(&self, arg: &Box<ast::Arg>, default: Option<&ast::Expr>) -> Parameter {
+        let optional = default.is_some();
+        let default_value = default.map(|expr| {
+            // Извлекаем текстовое представление выражения по умолчанию
+            match expr {
+                ast::Expr::Constant(constant) => match &constant.value {
+                    ast::Constant::Str(s) => format!("\"{}\"", s),
+                    ast::Constant::Int(i) => i.to_string(),
+                    ast::Constant::Float(f) => f.to_string(),
+                    ast::Constant::Bool(b) => b.to_string(),
+                    ast::Constant::None => "None".to_string(),
+                    _ => format!("{:?}", constant.value),
+                },
+                _ => format!("{:?}", expr),
+            }
+        });
+        
+        Parameter {
+            name: arg.arg.to_string(),
+            type_info: TypeInfo {
+                base_type: BaseType::Unknown,
+                schema_ref: None,
+                constraints: Vec::new(),
+                optional,
+            },
+            optional,
+            default_value,
+        }
+    }
+
 
     fn get_or_create_module_node(&mut self, path: &Path) -> Result<NodeId> {
         let normalized = Self::normalize_path(path);
@@ -545,15 +617,84 @@ impl CallGraphBuilder {
             return Some(*node);
         }
 
-        if let Some((_, node)) = self
+        // Находим все совпадения по ends_with("::name")
+        let matches: Vec<_> = self
             .function_nodes
             .iter()
-            .find(|(key, _)| key.ends_with(&format!("::{}", name)))
-        {
-            return Some(*node);
+            .filter(|(key, _)| key.ends_with(&format!("::{}", name)))
+            .collect();
+
+        if matches.is_empty() {
+            return crate::call_graph::find_node_by_name(&self.graph, name);
         }
 
-        crate::call_graph::find_node_by_name(&self.graph, name)
+        if matches.len() == 1 {
+            return Some(*matches[0].1);
+        }
+
+        // Дизамбигуация: находим лучшее совпадение
+        // 1. Предпочитаем точное совпадение пути модуля
+        let current_dir = normalized.parent().map(|p| p.to_path_buf());
+        if let Some(dir) = current_dir {
+            if let Some((_, node)) = matches.iter().find(|(key, _)| {
+                if let Some(key_path) = Self::extract_path_from_key(key) {
+                    key_path.parent() == Some(&dir)
+                } else {
+                    false
+                }
+            }) {
+                return Some(**node);
+            }
+        }
+
+        // 2. Предпочитаем совпадения с самым длинным общим префиксом
+        let best_match = matches
+            .iter()
+            .max_by_key(|(key, _)| {
+                if let Some(key_path) = Self::extract_path_from_key(key) {
+                    Self::common_prefix_length(&normalized, &key_path)
+                } else {
+                    0
+                }
+            });
+
+        if let Some((_, node)) = best_match {
+            // Логируем предупреждение о неоднозначности
+            eprintln!(
+                "Warning: Ambiguous function name '{}' found {} matches, selected one",
+                name,
+                matches.len()
+            );
+            return Some(**node);
+        }
+
+        // 3. Fallback: выбираем первый детерминистически
+        Some(*matches[0].1)
+    }
+
+    /// Извлекает путь из ключа функции (формат "path::name")
+    fn extract_path_from_key(key: &str) -> Option<PathBuf> {
+        if let Some(pos) = key.rfind("::") {
+            PathBuf::from(&key[..pos]).canonicalize().ok()
+        } else {
+            None
+        }
+    }
+
+    /// Вычисляет длину общего префикса двух путей
+    fn common_prefix_length(path1: &Path, path2: &Path) -> usize {
+        let components1: Vec<_> = path1.components().collect();
+        let components2: Vec<_> = path2.components().collect();
+        let min_len = components1.len().min(components2.len());
+        let mut common = 0;
+        for i in 0..min_len {
+            if components1[i] == components2[i] {
+                common += 1;
+            } else {
+                break;
+            }
+        }
+        common
     }
 
     fn node_file_path(&self, node_id: NodeId) -> Option<PathBuf> {
@@ -672,6 +813,35 @@ impl CallGraphBuilder {
 
     fn extract_http_method(&self, decorator_name: &str) -> Option<HttpMethod> {
         let method_part = decorator_name.split('.').nth(1)?;
-        HttpMethod::from_str(method_part)
+        method_part.parse().ok()
+    }
+
+    /// Проверяет, есть ли указанный декоратор в списке декораторов
+    fn has_decorator(&self, decorator_list: &[ast::Expr], decorator_name: &str) -> bool {
+        for decorator in decorator_list {
+            if let Some(name) = self.get_decorator_name(decorator) {
+                // Проверяем точное совпадение или совпадение последнего сегмента
+                if name == decorator_name || name.ends_with(&format!(".{}", decorator_name)) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Извлекает имя декоратора из AST выражения
+    fn get_decorator_name(&self, decorator: &ast::Expr) -> Option<String> {
+        match decorator {
+            ast::Expr::Name(name) => Some(name.id.to_string()),
+            ast::Expr::Attribute(attr) => {
+                if let Some(base) = self.get_decorator_name(&attr.value) {
+                    Some(format!("{}.{}", base, attr.attr))
+                } else {
+                    Some(attr.attr.to_string())
+                }
+            }
+            ast::Expr::Call(call_expr) => self.get_decorator_name(&call_expr.func),
+            _ => None,
+        }
     }
 }

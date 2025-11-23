@@ -4,10 +4,14 @@
 """
 import importlib.util
 import inspect
+import sys
+import logging
 from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+
+logger = logging.getLogger(__name__)
 
 
 class FastApiExtractor:
@@ -28,6 +32,8 @@ class FastApiExtractor:
             raise ValueError(f"Cannot load module from {self.app_path}")
         
         module = importlib.util.module_from_spec(spec)
+        # Добавляем модуль в sys.modules для корректной работы относительных импортов
+        sys.modules[spec.name] = module
         spec.loader.exec_module(module)
         
         # Ищем app в модуле
@@ -46,12 +52,23 @@ class FastApiExtractor:
         routes = []
         for route in self.app.routes:
             if isinstance(route, APIRoute):
-                handler_file = inspect.getfile(route.endpoint)
-                handler_line = inspect.getsourcelines(route.endpoint)[1]
+                # Обрабатываем возможные исключения при получении информации о файле
+                try:
+                    handler_file = inspect.getfile(route.endpoint)
+                    handler_line = inspect.getsourcelines(route.endpoint)[1]
+                except (TypeError, OSError) as e:
+                    handler_file = None
+                    handler_line = None
+                    logger.warning(
+                        f"Не удалось получить информацию о файле для {route.endpoint}: {e}"
+                    )
+                
+                # Сохраняем все HTTP методы без мутации route.methods
+                methods = list(route.methods) if route.methods else ["GET"]
                 
                 routes.append({
                     "path": route.path,
-                    "method": route.methods.pop() if route.methods else "GET",
+                    "methods": methods,
                     "handler": route.endpoint.__name__,
                     "handler_file": handler_file,
                     "handler_line": handler_line,

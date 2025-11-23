@@ -18,14 +18,23 @@ impl OpenApiParser {
     pub fn extract_endpoints(&self) -> Vec<ApiEndpoint> {
         let mut endpoints = Vec::new();
 
+        // Валидные HTTP методы (case-insensitive)
+        let valid_methods = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
+
         if let Some(paths) = self.spec.get("paths").and_then(|p| p.as_object()) {
             for (path, path_item) in paths {
                 if let Some(path_item_obj) = path_item.as_object() {
-                    for (method, operation) in path_item_obj {
+                    for (method_key, operation) in path_item_obj {
+                        // Фильтруем только валидные HTTP методы, пропуская не-методы ($ref, summary, description, servers, parameters)
+                        let method_lower = method_key.to_lowercase();
+                        if !valid_methods.contains(&method_lower.as_str()) {
+                            continue;
+                        }
+                        
                         if let Some(operation_obj) = operation.as_object() {
                             endpoints.push(ApiEndpoint {
                                 path: path.clone(),
-                                method: method.to_uppercase(),
+                                method: method_key.to_uppercase(),
                                 operation_id: operation_obj
                                     .get("operationId")
                                     .and_then(|id| id.as_str())
@@ -98,4 +107,143 @@ pub struct ApiEndpoint {
     pub operation_id: Option<String>,
     pub request_schema: Option<SchemaReference>,
     pub response_schema: Option<SchemaReference>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_parse_minimal_valid_openapi() {
+        let spec_json = json!({
+            "openapi": "3.0.0",
+            "paths": {
+                "/users": {
+                    "get": {
+                        "operationId": "getUsers",
+                        "responses": {
+                            "200": {
+                                "description": "Success"
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let parser = OpenApiParser::from_json(&spec_json.to_string()).unwrap();
+        let endpoints = parser.extract_endpoints();
+        
+        assert_eq!(endpoints.len(), 1);
+        assert_eq!(endpoints[0].path, "/users");
+        assert_eq!(endpoints[0].method, "GET");
+        assert_eq!(endpoints[0].operation_id, Some("getUsers".to_string()));
+    }
+
+    #[test]
+    fn test_multiple_http_methods() {
+        let spec_json = json!({
+            "openapi": "3.0.0",
+            "paths": {
+                "/users": {
+                    "get": {
+                        "operationId": "getUsers",
+                        "responses": {"200": {"description": "Success"}}
+                    },
+                    "post": {
+                        "operationId": "createUser",
+                        "responses": {"200": {"description": "Success"}}
+                    }
+                }
+            }
+        });
+
+        let parser = OpenApiParser::from_json(&spec_json.to_string()).unwrap();
+        let endpoints = parser.extract_endpoints();
+        
+        assert_eq!(endpoints.len(), 2);
+        let methods: Vec<&str> = endpoints.iter().map(|e| e.method.as_str()).collect();
+        assert!(methods.contains(&"GET"));
+        assert!(methods.contains(&"POST"));
+    }
+
+    #[test]
+    fn test_missing_optional_fields() {
+        let spec_json = json!({
+            "openapi": "3.0.0",
+            "paths": {
+                "/users": {
+                    "get": {
+                        "responses": {"200": {"description": "Success"}}
+                    }
+                }
+            }
+        });
+
+        let parser = OpenApiParser::from_json(&spec_json.to_string()).unwrap();
+        let endpoints = parser.extract_endpoints();
+        
+        assert_eq!(endpoints.len(), 1);
+        assert_eq!(endpoints[0].operation_id, None);
+        assert_eq!(endpoints[0].request_schema, None);
+    }
+
+    #[test]
+    fn test_malformed_json() {
+        let result = OpenApiParser::from_json("{ invalid json }");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_empty_paths() {
+        let spec_json = json!({
+            "openapi": "3.0.0",
+            "paths": {}
+        });
+
+        let parser = OpenApiParser::from_json(&spec_json.to_string()).unwrap();
+        let endpoints = parser.extract_endpoints();
+        assert_eq!(endpoints.len(), 0);
+    }
+
+    #[test]
+    fn test_empty_path_item() {
+        let spec_json = json!({
+            "openapi": "3.0.0",
+            "paths": {
+                "/users": {}
+            }
+        });
+
+        let parser = OpenApiParser::from_json(&spec_json.to_string()).unwrap();
+        let endpoints = parser.extract_endpoints();
+        assert_eq!(endpoints.len(), 0);
+    }
+
+    #[test]
+    fn test_filter_non_method_keys() {
+        let spec_json = json!({
+            "openapi": "3.0.0",
+            "paths": {
+                "/users": {
+                    "summary": "Users endpoint",
+                    "description": "User management",
+                    "get": {
+                        "operationId": "getUsers",
+                        "responses": {"200": {"description": "Success"}}
+                    },
+                    "$ref": "#/components/pathItems/Users",
+                    "parameters": []
+                }
+            }
+        });
+
+        let parser = OpenApiParser::from_json(&spec_json.to_string()).unwrap();
+        let endpoints = parser.extract_endpoints();
+        
+        // Должен быть только один endpoint (get), не-методы должны быть пропущены
+        assert_eq!(endpoints.len(), 1);
+        assert_eq!(endpoints[0].method, "GET");
+    }
 }

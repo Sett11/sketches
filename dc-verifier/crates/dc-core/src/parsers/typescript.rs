@@ -1,4 +1,3 @@
-use crate::call_graph::CallNode;
 use crate::parsers::{Call, Import};
 use anyhow::Result;
 use std::path::Path;
@@ -13,7 +12,7 @@ impl TypeScriptParser {
     }
 
     /// Парсит файл через swc
-    pub fn parse_file(&self, path: &Path) -> Result<swc_ecma_ast::Module> {
+    pub fn parse_file(&self, _path: &Path) -> Result<swc_ecma_ast::Module> {
         // TODO: Реализовать парсинг через swc
         // Используем swc_ecma_parser для парсинга
         todo!("swc parsing")

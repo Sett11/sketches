@@ -1,6 +1,6 @@
 use anyhow::Result;
 use dc_core::models::{Location, SchemaReference, SchemaType};
-use dc_core::parsers::PythonParser;
+use dc_core::parsers::{LocationConverter, PythonParser};
 use pyo3::prelude::*;
 use rustpython_parser::{parse, Mode};
 use std::fs;
@@ -37,10 +37,13 @@ impl PydanticExtractor {
             path.to_string_lossy().as_ref(),
         )?;
         
+        // Создаем LocationConverter для точной конвертации байтовых смещений
+        let converter = LocationConverter::new(source);
+        
         // Используем PythonParser для извлечения моделей
         let parser = PythonParser::new();
         let file_path = path.to_string_lossy().to_string();
-        Ok(parser.extract_pydantic_models(&ast, &file_path))
+        Ok(parser.extract_pydantic_models(&ast, &file_path, &converter))
     }
 
     /// Преобразует Pydantic модель в SchemaReference

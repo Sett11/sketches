@@ -1,4 +1,5 @@
 use anyhow::Result;
+use chrono::Utc;
 use dc_core::models::DataChain;
 use std::fs;
 use std::path::Path;
@@ -18,27 +19,38 @@ impl MarkdownReporter {
             chrono::Utc::now().format("%Y-%m-%d")
         ));
 
-        // Статистика
+        // Статистика - считаем цепочки, а не контракты
         let total_chains = chains.len();
-        let critical = chains
+        let chains_with_critical = chains
             .iter()
-            .flat_map(|c| &c.contracts)
-            .filter(|c| c.severity == dc_core::models::Severity::Critical)
+            .filter(|chain| {
+                chain
+                    .contracts
+                    .iter()
+                    .any(|c| c.severity == dc_core::models::Severity::Critical)
+            })
             .count();
-        let warnings = chains
+        let chains_with_warnings = chains
             .iter()
-            .flat_map(|c| &c.contracts)
-            .filter(|c| c.severity == dc_core::models::Severity::Warning)
+            .filter(|chain| {
+                // Цепочки без Critical, но с хотя бы одним Warning
+                !chain
+                    .contracts
+                    .iter()
+                    .any(|c| c.severity == dc_core::models::Severity::Critical)
+                    && chain
+                        .contracts
+                        .iter()
+                        .any(|c| c.severity == dc_core::models::Severity::Warning)
+            })
             .count();
+        let valid_chains = total_chains - chains_with_critical - chains_with_warnings;
 
         report.push_str("## Статистика проверки\n");
         report.push_str(&format!("- **Всего цепочек**: {}\n", total_chains));
-        report.push_str(&format!("- **Критические проблемы**: {}\n", critical));
-        report.push_str(&format!("- **Предупреждения**: {}\n", warnings));
-        report.push_str(&format!(
-            "- **Корректные цепочки**: {}\n\n",
-            total_chains - critical - warnings
-        ));
+        report.push_str(&format!("- **Критические проблемы**: {}\n", chains_with_critical));
+        report.push_str(&format!("- **Предупреждения**: {}\n", chains_with_warnings));
+        report.push_str(&format!("- **Корректные цепочки**: {}\n\n", valid_chains));
         report.push_str("---\n\n");
 
         // Детали по цепочкам
@@ -48,8 +60,11 @@ impl MarkdownReporter {
 
             // Путь данных
             report.push_str("#### Путь данных:\n```\n");
-            for link in &chain.links {
-                report.push_str(&format!("{} → ", link.id));
+            for (idx, link) in chain.links.iter().enumerate() {
+                if idx > 0 {
+                    report.push_str(" → ");
+                }
+                report.push_str(&link.id);
             }
             report.push_str("\n```\n\n");
 
@@ -94,7 +109,7 @@ impl MarkdownReporter {
 
         // Итоговые выводы
         report.push_str("## Итоговые выводы\n\n");
-        if critical == 0 && warnings == 0 {
+        if chains_with_critical == 0 && chains_with_warnings == 0 {
             report.push_str("### ✅ Общая оценка: **КОРРЕКТНО**\n\n");
         } else {
             report.push_str("### ⚠️ Общая оценка: **ТРЕБУЕТ ВНИМАНИЯ**\n\n");

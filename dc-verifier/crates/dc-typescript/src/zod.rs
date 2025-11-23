@@ -1,4 +1,3 @@
-use anyhow::Result;
 use dc_core::models::{Location, SchemaReference, SchemaType};
 use swc_ecma_ast::{Callee, CallExpr, Expr, MemberProp};
 

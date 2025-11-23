@@ -58,7 +58,7 @@ impl<'a> DataFlowTracker<'a> {
                 for v in vars {
                     if v.name == var.name {
                         let mut path = DataPath::new(current, neighbor, var.clone());
-                        path.add_node(current);
+                        path.push_node(current);
                         paths.push(path);
                     }
                 }
@@ -75,21 +75,7 @@ impl<'a> DataFlowTracker<'a> {
         let visited = &mut std::collections::HashSet::new();
 
         // Создаем переменную для параметра
-        let param_var = Variable {
-            name: param_name.to_string(),
-            type_info: crate::models::TypeInfo {
-                base_type: crate::models::BaseType::Unknown,
-                schema_ref: None,
-                constraints: Vec::new(),
-                optional: false,
-            },
-            location: crate::models::Location {
-                file: String::new(),
-                line: 0,
-                column: None,
-            },
-            source: crate::data_flow::VariableSource::Parameter,
-        };
+        let param_var = Self::create_param_variable(param_name);
 
         // Находим все узлы, которые вызывают эту функцию
         let callers = crate::call_graph::incoming_nodes(self.graph, func);
@@ -102,7 +88,7 @@ impl<'a> DataFlowTracker<'a> {
                     for (param, var_name) in argument_mapping {
                         if param == param_name || var_name == param_name {
                             let mut path = DataPath::new(caller, func, param_var.clone());
-                            path.add_node(caller);
+                            path.push_node(caller);
                             paths.push(path);
                             
                             // Рекурсивно отслеживаем дальше
@@ -138,25 +124,11 @@ impl<'a> DataFlowTracker<'a> {
             // Проверяем, используется ли параметр в вызове
             if let Some(edge) = self.graph.edges_connecting(*current, *neighbor).next() {
                 if let crate::call_graph::CallEdge::Call { argument_mapping, .. } = edge.weight() {
-                    for (param, var_name) in argument_mapping {
+                    for (_param, var_name) in argument_mapping {
                         if var_name == param_name {
-                            let param_var = Variable {
-                                name: param_name.to_string(),
-                                type_info: crate::models::TypeInfo {
-                                    base_type: crate::models::BaseType::Unknown,
-                                    schema_ref: None,
-                                    constraints: Vec::new(),
-                                    optional: false,
-                                },
-                                location: crate::models::Location {
-                                    file: String::new(),
-                                    line: 0,
-                                    column: None,
-                                },
-                                source: crate::data_flow::VariableSource::Parameter,
-                            };
+                            let param_var = Self::create_param_variable(param_name);
                             let mut path = DataPath::new(current, neighbor, param_var);
-                            path.add_node(current);
+                            path.push_node(current);
                             paths.push(path);
                         }
                     }
@@ -171,24 +143,10 @@ impl<'a> DataFlowTracker<'a> {
     /// Отслеживает возвращаемое значение
     pub fn track_return(&self, func: NodeId) -> Vec<DataPath> {
         let mut paths = Vec::new();
-        let visited = &mut std::collections::HashSet::new>();
+        let mut visited = std::collections::HashSet::new();
 
         // Создаем переменную для возвращаемого значения
-        let return_var = Variable {
-            name: "return".to_string(),
-            type_info: crate::models::TypeInfo {
-                base_type: crate::models::BaseType::Unknown,
-                schema_ref: None,
-                constraints: Vec::new(),
-                optional: false,
-            },
-            location: crate::models::Location {
-                file: String::new(),
-                line: 0,
-                column: None,
-            },
-            source: crate::data_flow::VariableSource::Return,
-        };
+        let return_var = Self::create_return_variable();
 
         // Находим все узлы, которые вызывают эту функцию
         let callers = crate::call_graph::incoming_nodes(self.graph, func);
@@ -196,12 +154,12 @@ impl<'a> DataFlowTracker<'a> {
         for caller in callers {
             // Создаем путь от функции к вызывающему узлу
             let mut path = DataPath::new(func, caller, return_var.clone());
-            path.add_node(func);
+            path.push_node(func);
             paths.push(path);
         }
 
         // Также отслеживаем использование возвращаемого значения дальше
-        self.track_return_recursive(func, &mut paths, visited);
+        self.track_return_recursive(func, &mut paths, &mut visited);
 
         paths
     }
@@ -222,31 +180,55 @@ impl<'a> DataFlowTracker<'a> {
             // Идем по исходящим ребрам вызывающего узла (куда передается возвращаемое значение)
             for next_node in crate::call_graph::outgoing_nodes(self.graph, caller) {
                 if next_node != current {
-                    let return_var = Variable {
-                        name: "return".to_string(),
-                        type_info: crate::models::TypeInfo {
-                            base_type: crate::models::BaseType::Unknown,
-                            schema_ref: None,
-                            constraints: Vec::new(),
-                            optional: false,
-                        },
-                        location: crate::models::Location {
-                            file: String::new(),
-                            line: 0,
-                            column: None,
-                        },
-                        source: crate::data_flow::VariableSource::Return,
-                    };
+                    let return_var = Self::create_return_variable();
                     let mut path = DataPath::new(caller, next_node, return_var);
-                    path.add_node(caller);
+                    path.push_node(caller);
                     paths.push(path);
                 }
             }
         }
 
         // Рекурсивно продолжаем для всех узлов, которые вызывают эту функцию
-        for caller in self.graph.incoming_nodes(current) {
+        for caller in crate::call_graph::incoming_nodes(self.graph, current) {
             self.track_return_recursive(caller, paths, visited);
+        }
+    }
+
+    /// Создает переменную для параметра
+    fn create_param_variable(param_name: &str) -> Variable {
+        Variable {
+            name: param_name.to_string(),
+            type_info: crate::models::TypeInfo {
+                base_type: crate::models::BaseType::Unknown,
+                schema_ref: None,
+                constraints: Vec::new(),
+                optional: false,
+            },
+            location: crate::models::Location {
+                file: String::new(),
+                line: 0,
+                column: None,
+            },
+            source: crate::data_flow::VariableSource::Parameter,
+        }
+    }
+
+    /// Создает переменную для возвращаемого значения
+    fn create_return_variable() -> Variable {
+        Variable {
+            name: "return".to_string(),
+            type_info: crate::models::TypeInfo {
+                base_type: crate::models::BaseType::Unknown,
+                schema_ref: None,
+                constraints: Vec::new(),
+                optional: false,
+            },
+            location: crate::models::Location {
+                file: String::new(),
+                line: 0,
+                column: None,
+            },
+            source: crate::data_flow::VariableSource::Return,
         }
     }
 }

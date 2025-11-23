@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::fs;
 use std::path::Path;
 
-/// Создает конфигурационный файл
+/// Creates the configuration file
 pub fn execute_init(path: &str) -> Result<()> {
     let config_content = r#"project_name = "MyApp"
 entry_point = "backend/api/main.py"

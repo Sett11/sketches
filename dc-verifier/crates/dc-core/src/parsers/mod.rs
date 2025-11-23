@@ -1,7 +1,9 @@
+pub mod location;
 pub mod openapi;
 pub mod python;
 pub mod typescript;
 
+pub use location::*;
 pub use openapi::*;
 pub use python::*;
 pub use typescript::*;

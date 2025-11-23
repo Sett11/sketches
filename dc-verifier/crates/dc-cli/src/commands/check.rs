@@ -26,7 +26,7 @@ pub fn execute_check(config_path: &str) -> Result<()> {
                 let app_path = PathBuf::from(app_path);
 
                 // Строим граф вызовов для FastAPI
-                let mut builder = FastApiCallGraphBuilder::new(app_path);
+                let builder = FastApiCallGraphBuilder::new(app_path);
                 let graph = builder.build_graph()?;
 
                 // Создаем DataFlowTracker и ChainBuilder
