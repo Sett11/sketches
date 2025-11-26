@@ -12,5 +12,3 @@ pub struct Decorator {
     /// Имя функции, к которой применяется декоратор
     pub target_function: Option<String>,
 }
-
-

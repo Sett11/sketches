@@ -7,7 +7,7 @@ use std::path::PathBuf;
 #[test]
 fn test_chain_with_typescript_function() {
     let mut graph = CallGraph::new();
-    
+
     // Создаем функцию с TypeScript схемой
     let function_node = graph.add_node(CallNode::Function {
         name: "processUser".to_string(),
@@ -27,7 +27,10 @@ fn test_chain_with_typescript_function() {
                     },
                     metadata: {
                         let mut m = std::collections::HashMap::new();
-                        m.insert("fields".to_string(), "name:string:required,age:number:required".to_string());
+                        m.insert(
+                            "fields".to_string(),
+                            "name:string:required,age:number:required".to_string(),
+                        );
                         m
                     },
                 }),
@@ -49,7 +52,10 @@ fn test_chain_with_typescript_function() {
                 },
                 metadata: {
                     let mut m = std::collections::HashMap::new();
-                    m.insert("fields".to_string(), "id:string:required,user:object:required".to_string());
+                    m.insert(
+                        "fields".to_string(),
+                        "id:string:required,user:object:required".to_string(),
+                    );
                     m
                 },
             }),
@@ -57,10 +63,10 @@ fn test_chain_with_typescript_function() {
             optional: false,
         }),
     });
-    
+
     let tracker = DataFlowTracker::new(&graph);
     let _builder = ChainBuilder::new(&graph, &tracker);
-    
+
     // Проверяем, что функция содержит TypeScript схему в параметрах
     let function_node_data = graph.node_weight(function_node).unwrap();
     if let CallNode::Function { parameters, .. } = function_node_data {
@@ -81,7 +87,7 @@ fn test_chain_with_typescript_function() {
 #[test]
 fn test_contract_checker_with_typescript_schemas() {
     use dc_core::models::Contract;
-    
+
     let from_schema = SchemaReference {
         name: "UserRequest".to_string(),
         schema_type: SchemaType::TypeScript,
@@ -92,11 +98,14 @@ fn test_contract_checker_with_typescript_schemas() {
         },
         metadata: {
             let mut m = std::collections::HashMap::new();
-            m.insert("fields".to_string(), "name:string:required,age:number:required".to_string());
+            m.insert(
+                "fields".to_string(),
+                "name:string:required,age:number:required".to_string(),
+            );
             m
         },
     };
-    
+
     let to_schema = SchemaReference {
         name: "User".to_string(),
         schema_type: SchemaType::TypeScript,
@@ -107,11 +116,14 @@ fn test_contract_checker_with_typescript_schemas() {
         },
         metadata: {
             let mut m = std::collections::HashMap::new();
-            m.insert("fields".to_string(), "name:string:required,age:number:required,email:string:optional".to_string());
+            m.insert(
+                "fields".to_string(),
+                "name:string:required,age:number:required,email:string:optional".to_string(),
+            );
             m
         },
     };
-    
+
     let contract = Contract {
         from_link_id: "link1".to_string(),
         to_link_id: "link2".to_string(),
@@ -120,21 +132,24 @@ fn test_contract_checker_with_typescript_schemas() {
         mismatches: Vec::new(),
         severity: dc_core::models::Severity::Info,
     };
-    
+
     let checker = ContractChecker::new();
-    let _mismatches = checker.check_contract(&contract);
-    
+    let mismatches = checker.check_contract(&contract);
+
     // Проверяем, что контракт проверен (может быть с mismatches или без)
     assert_eq!(contract.from_schema.name, "UserRequest");
     assert_eq!(contract.to_schema.name, "User");
-    // Проверяем, что проверка выполнена (mismatches может быть пустым или содержать несоответствия)
-    // Это нормально, так как схемы могут быть совместимы
+    assert!(
+        mismatches.is_empty(),
+        "Expected no mismatches for compatible schemas, got {:?}",
+        mismatches
+    );
 }
 
 #[test]
 fn test_schema_parser_typescript() {
     use dc_core::analyzers::SchemaParser;
-    
+
     let schema_ref = SchemaReference {
         name: "User".to_string(),
         schema_type: SchemaType::TypeScript,
@@ -145,13 +160,16 @@ fn test_schema_parser_typescript() {
         },
         metadata: {
             let mut m = std::collections::HashMap::new();
-            m.insert("fields".to_string(), "name:string:required,age:number:required,email:string:optional".to_string());
+            m.insert(
+                "fields".to_string(),
+                "name:string:required,age:number:required,email:string:optional".to_string(),
+            );
             m
         },
     };
-    
+
     let json_schema = SchemaParser::parse(&schema_ref).unwrap();
-    
+
     assert_eq!(json_schema.schema_type, "object");
     assert_eq!(json_schema.properties.len(), 3);
     assert!(json_schema.properties.contains_key("name"));
@@ -161,4 +179,3 @@ fn test_schema_parser_typescript() {
     assert!(json_schema.required.contains(&"name".to_string()));
     assert!(json_schema.required.contains(&"age".to_string()));
 }
-

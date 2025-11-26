@@ -1,16 +1,17 @@
 use crate::config::Config;
 use crate::reporters::{JsonReporter, MarkdownReporter};
+use crate::ReportFormat;
 use anyhow::Result;
+use dc_adapter_fastapi::FastApiCallGraphBuilder;
 use dc_core::analyzers::{ChainBuilder, ContractChecker};
 use dc_core::data_flow::DataFlowTracker;
 use dc_core::models::Severity;
-use dc_adapter_fastapi::FastApiCallGraphBuilder;
 use dc_typescript::TypeScriptCallGraphBuilder;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::PathBuf;
 
 /// Executes data chain verification
-pub fn execute_check(config_path: &str, format: &str) -> Result<()> {
+pub fn execute_check(config_path: &str, format: ReportFormat) -> Result<()> {
     // 1. Load configuration
     let config = Config::load(config_path)?;
 
@@ -28,7 +29,11 @@ pub fn execute_check(config_path: &str, format: &str) -> Result<()> {
     pb.set_message("Building graphs...");
 
     for (idx, adapter_config) in config.adapters.iter().enumerate() {
-        pb.set_message(format!("Processing adapter {} ({})...", idx + 1, adapter_config.adapter_type));
+        pb.set_message(format!(
+            "Processing adapter {} ({})...",
+            idx + 1,
+            adapter_config.adapter_type
+        ));
         match adapter_config.adapter_type.as_str() {
             "fastapi" => {
                 let app_path = adapter_config
@@ -121,13 +126,11 @@ pub fn execute_check(config_path: &str, format: &str) -> Result<()> {
     pb.set_message("Generating report...");
     pb.enable_steady_tick(std::time::Duration::from_millis(100));
     match format {
-        "json" => {
-            let reporter = JsonReporter;
-            reporter.generate(&all_chains, &config.output.path)?;
+        ReportFormat::Json => {
+            JsonReporter.generate(&all_chains, &config.output.path)?;
         }
-        "markdown" | _ => {
-            let reporter = MarkdownReporter;
-            reporter.generate(&all_chains, &config.output.path)?;
+        ReportFormat::Markdown => {
+            MarkdownReporter.generate(&all_chains, &config.output.path)?;
         }
     }
 

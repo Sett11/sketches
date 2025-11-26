@@ -9,7 +9,10 @@ impl LocationConverter {
     /// Создает новый LocationConverter из исходного кода
     pub fn new(source: String) -> Self {
         let line_starts = Self::calculate_line_starts(&source);
-        Self { source, line_starts }
+        Self {
+            source,
+            line_starts,
+        }
     }
 
     /// Конвертирует байтовое смещение в номер строки и колонки (1-based)
@@ -17,9 +20,11 @@ impl LocationConverter {
         if offset > self.source.len() {
             // Если смещение выходит за границы, возвращаем последнюю строку
             let last_line = self.line_starts.len().max(1);
-            let last_col = self.source.len().saturating_sub(
-                *self.line_starts.last().unwrap_or(&0)
-            ).max(1);
+            let last_col = self
+                .source
+                .len()
+                .saturating_sub(*self.line_starts.last().unwrap_or(&0))
+                .max(1);
             return (last_line, last_col);
         }
 
@@ -73,13 +78,13 @@ mod tests {
 
         // Начало первой строки
         assert_eq!(converter.byte_offset_to_location(0), (1, 1));
-        
+
         // Конец первой строки (перед \n)
         assert_eq!(converter.byte_offset_to_location(5), (1, 6));
-        
+
         // Начало второй строки (после \n)
         assert_eq!(converter.byte_offset_to_location(6), (2, 1));
-        
+
         // Середина второй строки
         assert_eq!(converter.byte_offset_to_location(8), (2, 3));
     }
@@ -95,11 +100,10 @@ mod tests {
     fn test_offset_out_of_bounds() {
         let source = "line1\nline2".to_string();
         let converter = LocationConverter::new(source);
-        
+
         // offset за пределами
         let (line, col) = converter.byte_offset_to_location(1000);
         assert!(line >= 1);
         assert!(col >= 1);
     }
 }
-

@@ -70,10 +70,9 @@ impl Config {
             match adapter.adapter_type.as_str() {
                 "fastapi" => {
                     // For FastAPI, app_path is required
-                    let app_path = adapter
-                        .app_path
-                        .as_ref()
-                        .ok_or_else(|| anyhow::anyhow!("Adapter {}: FastAPI adapter requires app_path", idx))?;
+                    let app_path = adapter.app_path.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!("Adapter {}: FastAPI adapter requires app_path", idx)
+                    })?;
                     let path = Path::new(app_path);
                     if !path.exists() {
                         anyhow::bail!("Adapter {}: app_path does not exist: {}", idx, app_path);
@@ -84,10 +83,9 @@ impl Config {
                 }
                 "typescript" => {
                     // For TypeScript, src_paths is required
-                    let src_paths = adapter
-                        .src_paths
-                        .as_ref()
-                        .ok_or_else(|| anyhow::anyhow!("Adapter {}: TypeScript adapter requires src_paths", idx))?;
+                    let src_paths = adapter.src_paths.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!("Adapter {}: TypeScript adapter requires src_paths", idx)
+                    })?;
                     if src_paths.is_empty() {
                         anyhow::bail!("Adapter {}: src_paths cannot be empty", idx);
                     }

@@ -1,12 +1,12 @@
 use anyhow::{Context, Result};
-use rustpython_parser::{ast, parse, Mode};
 use rustpython_parser::ast::Ranged;
+use rustpython_parser::{ast, parse, Mode};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::call_graph::{CallEdge, CallGraph, CallNode, HttpMethod, Parameter};
 use crate::call_graph::decorator::Decorator;
+use crate::call_graph::{CallEdge, CallGraph, CallNode, HttpMethod, Parameter};
 use crate::models::{BaseType, NodeId, TypeInfo};
 use crate::parsers::{Call, Import, LocationConverter, PythonParser};
 
@@ -91,7 +91,7 @@ impl CallGraphBuilder {
         if let Some(max_depth) = self.max_depth {
             if self.current_depth >= max_depth {
                 return Err(anyhow::Error::from(
-                    crate::error::GraphError::MaxDepthExceeded(max_depth)
+                    crate::error::GraphError::MaxDepthExceeded(max_depth),
                 ));
             }
         }
@@ -123,7 +123,7 @@ impl CallGraphBuilder {
 
         self.process_imports(&ast, module_node, &normalized_entry, &converter)?;
         self.extract_functions_and_classes(&ast, &normalized_entry, &converter)?;
-        self.process_calls(&ast, module_node, &normalized_entry)?;
+        self.process_calls(&ast, module_node, &normalized_entry, &converter)?;
         self.process_decorators(&ast, &normalized_entry, &converter)?;
 
         self.current_depth -= 1;
@@ -293,7 +293,9 @@ impl CallGraphBuilder {
         converter: &LocationConverter,
     ) -> Result<()> {
         let file_path_str = file_path.to_string_lossy().to_string();
-        let imports = self.parser.extract_imports(module_ast, &file_path_str, converter);
+        let imports = self
+            .parser
+            .extract_imports(module_ast, &file_path_str, converter);
         for import in imports {
             if let Err(err) = self.process_import(module_node, &import, file_path) {
                 eprintln!(
@@ -329,8 +331,13 @@ impl CallGraphBuilder {
         match stmt {
             ast::Stmt::FunctionDef(func_def) => {
                 if let Some((class_name, class_node)) = class_context {
-                    let method_id =
-                        self.add_method_node(&class_name, class_node, func_def, file_path, converter)?;
+                    let method_id = self.add_method_node(
+                        &class_name,
+                        class_node,
+                        func_def,
+                        file_path,
+                        converter,
+                    )?;
                     if let Some(CallNode::Class { methods, .. }) =
                         self.graph.node_weight_mut(*class_node)
                     {
@@ -344,8 +351,13 @@ impl CallGraphBuilder {
             }
             ast::Stmt::AsyncFunctionDef(func_def) => {
                 if let Some((class_name, class_node)) = class_context {
-                    let method_id =
-                        self.add_async_method_node(&class_name, class_node, func_def, file_path, converter)?;
+                    let method_id = self.add_async_method_node(
+                        &class_name,
+                        class_node,
+                        func_def,
+                        file_path,
+                        converter,
+                    )?;
                     if let Some(CallNode::Class { methods, .. }) =
                         self.graph.node_weight_mut(*class_node)
                     {
@@ -508,11 +520,13 @@ impl CallGraphBuilder {
         module_ast: &ast::Mod,
         module_node: NodeId,
         file_path: &Path,
+        converter: &LocationConverter,
     ) -> Result<()> {
         let file_path_str = file_path.to_string_lossy().to_string();
-        let calls = self.parser.extract_calls(module_ast, &file_path_str);
+        let calls = self
+            .parser
+            .extract_calls(module_ast, &file_path_str, converter);
         for call in calls {
-
             let caller_node = match &call.caller {
                 Some(caller_name) => self.find_function_node(caller_name, file_path),
                 None => Some(module_node),
@@ -530,9 +544,16 @@ impl CallGraphBuilder {
         Ok(())
     }
 
-    fn process_decorators(&mut self, module_ast: &ast::Mod, file_path: &Path, converter: &LocationConverter) -> Result<()> {
+    fn process_decorators(
+        &mut self,
+        module_ast: &ast::Mod,
+        file_path: &Path,
+        converter: &LocationConverter,
+    ) -> Result<()> {
         let file_path_str = file_path.to_string_lossy().to_string();
-        let decorators = self.parser.extract_decorators(module_ast, &file_path_str, converter);
+        let decorators = self
+            .parser
+            .extract_decorators(module_ast, &file_path_str, converter);
         for decorator in decorators {
             if let Err(err) = self.process_decorator(&decorator, file_path) {
                 eprintln!(
@@ -546,25 +567,25 @@ impl CallGraphBuilder {
 
     fn convert_parameters(&self, args: &ast::Arguments) -> Vec<Parameter> {
         let mut params = Vec::new();
-        
+
         // posonlyargs, args, kwonlyargs are Vec<ArgWithDefault>
         // default is already stored inside each ArgWithDefault
-        
+
         // Process posonlyargs
         for arg in &args.posonlyargs {
             params.push(self.create_parameter_from_arg_with_default(arg));
         }
-        
+
         // Process args
         for arg in &args.args {
             params.push(self.create_parameter_from_arg_with_default(arg));
         }
-        
+
         // Process kwonlyargs
         for arg in &args.kwonlyargs {
             params.push(self.create_parameter_from_arg_with_default(arg));
         }
-        
+
         if let Some(arg) = &args.vararg {
             // vararg is Option<Box<Arg>>, without default
             params.push(self.create_parameter_from_arg(arg, None));
@@ -593,7 +614,7 @@ impl CallGraphBuilder {
                 _ => format!("{:?}", expr),
             }
         });
-        
+
         Parameter {
             name: arg.def.arg.to_string(),
             type_info: TypeInfo {
@@ -609,7 +630,11 @@ impl CallGraphBuilder {
 
     /// Creates a parameter from Arg (without default)
     /// Takes &Box<Arg>
-    fn create_parameter_from_arg(&self, arg: &Box<ast::Arg>, default: Option<&ast::Expr>) -> Parameter {
+    fn create_parameter_from_arg(
+        &self,
+        arg: &Box<ast::Arg>,
+        default: Option<&ast::Expr>,
+    ) -> Parameter {
         let optional = default.is_some();
         let default_value = default.map(|expr| {
             // Extract text representation of the default expression
@@ -625,7 +650,7 @@ impl CallGraphBuilder {
                 _ => format!("{:?}", expr),
             }
         });
-        
+
         Parameter {
             name: arg.arg.to_string(),
             type_info: TypeInfo {
@@ -638,7 +663,6 @@ impl CallGraphBuilder {
             default_value,
         }
     }
-
 
     fn get_or_create_module_node(&mut self, path: &Path) -> Result<NodeId> {
         let normalized = Self::normalize_path(path);
@@ -695,15 +719,13 @@ impl CallGraphBuilder {
         }
 
         // 2. Prefer matches with the longest common prefix
-        let best_match = matches
-            .iter()
-            .max_by_key(|(key, _)| {
-                if let Some(key_path) = Self::extract_path_from_key(key) {
-                    Self::common_prefix_length(&normalized, &key_path)
-                } else {
-                    0
-                }
-            });
+        let best_match = matches.iter().max_by_key(|(key, _)| {
+            if let Some(key_path) = Self::extract_path_from_key(key) {
+                Self::common_prefix_length(&normalized, &key_path)
+            } else {
+                0
+            }
+        });
 
         if let Some((_, node)) = best_match {
             // Log warning about ambiguity
@@ -715,8 +737,10 @@ impl CallGraphBuilder {
             return Some(**node);
         }
 
-        // 3. Fallback: select first deterministically
-        Some(*matches[0].1)
+        // 3. Fallback: select first deterministically (sorted by key)
+        let mut sorted_matches = matches.clone();
+        sorted_matches.sort_by(|(key_a, _), (key_b, _)| key_a.cmp(key_b));
+        sorted_matches.first().map(|(_, node)| **node)
     }
 
     /// Extracts path from function key (format "path::name")
@@ -753,10 +777,12 @@ impl CallGraphBuilder {
             CallNode::Class { file, .. } => Some(file),
             CallNode::Module { path } => Some(path),
             CallNode::Method { class, .. } => {
-                self.graph.node_weight(*class).and_then(|owner| match owner {
-                    CallNode::Class { file, .. } => Some(file.clone()),
-                    _ => None,
-                })
+                self.graph
+                    .node_weight(*class)
+                    .and_then(|owner| match owner {
+                        CallNode::Class { file, .. } => Some(file.clone()),
+                        _ => None,
+                    })
             }
             CallNode::Route { location, .. } => {
                 if location.file.is_empty() {

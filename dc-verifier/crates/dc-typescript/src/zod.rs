@@ -1,5 +1,5 @@
 use dc_core::models::{Location, SchemaReference, SchemaType};
-use swc_ecma_ast::{Callee, CallExpr, Expr, MemberProp};
+use swc_ecma_ast::{CallExpr, Callee, Expr, MemberProp};
 
 /// Извлекатель Zod схем из TypeScript кода
 pub struct ZodExtractor;
@@ -11,7 +11,12 @@ impl ZodExtractor {
     }
 
     /// Извлекает Zod схему из AST узла
-    pub fn extract_schema(&self, node: &Expr, file_path: &str, line: usize) -> Option<SchemaReference> {
+    pub fn extract_schema(
+        &self,
+        node: &Expr,
+        file_path: &str,
+        line: usize,
+    ) -> Option<SchemaReference> {
         // Ищем вызовы z.object(), z.string(), и т.д.
         if let Expr::Call(call_expr) = node {
             if let Callee::Expr(callee_expr) = &call_expr.callee {
@@ -19,7 +24,7 @@ impl ZodExtractor {
                 if self.is_zod_call(callee_expr) {
                     // Извлекаем имя схемы из контекста или создаем дефолтное
                     let schema_name = self.extract_schema_name(call_expr, None);
-                    
+
                     return Some(SchemaReference {
                         name: schema_name,
                         schema_type: SchemaType::Zod,
@@ -47,7 +52,7 @@ impl ZodExtractor {
         if let Callee::Expr(callee_expr) = &call_expr.callee {
             if self.is_zod_call(callee_expr) {
                 let schema_name = self.extract_schema_name(call_expr, var_name);
-                
+
                 return Some(SchemaReference {
                     name: schema_name,
                     schema_type: SchemaType::Zod,
@@ -92,7 +97,7 @@ impl ZodExtractor {
         if let Some(name) = var_name {
             return name.to_string();
         }
-        
+
         // Пытаемся найти имя переменной из контекста
         // Пока возвращаем дефолтное имя, если контекст недоступен
         "ZodSchema".to_string()

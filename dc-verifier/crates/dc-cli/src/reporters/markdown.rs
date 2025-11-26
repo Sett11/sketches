@@ -47,7 +47,10 @@ impl MarkdownReporter {
 
         report.push_str("## Статистика проверки\n");
         report.push_str(&format!("- **Всего цепочек**: {}\n", total_chains));
-        report.push_str(&format!("- **Критические проблемы**: {}\n", chains_with_critical));
+        report.push_str(&format!(
+            "- **Критические проблемы**: {}\n",
+            chains_with_critical
+        ));
         report.push_str(&format!("- **Предупреждения**: {}\n", chains_with_warnings));
         report.push_str(&format!("- **Корректные цепочки**: {}\n\n", valid_chains));
         report.push_str("---\n\n");

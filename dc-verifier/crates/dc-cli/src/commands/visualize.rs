@@ -24,7 +24,11 @@ pub fn execute_visualize(config_path: &str) -> Result<()> {
     pb.set_message("Building graphs...");
 
     for (idx, adapter_config) in config.adapters.iter().enumerate() {
-        pb.set_message(format!("Processing adapter {} ({})...", idx + 1, adapter_config.adapter_type));
+        pb.set_message(format!(
+            "Processing adapter {} ({})...",
+            idx + 1,
+            adapter_config.adapter_type
+        ));
         match adapter_config.adapter_type.as_str() {
             "fastapi" => {
                 let app_path = adapter_config
@@ -67,13 +71,29 @@ pub fn execute_visualize(config_path: &str) -> Result<()> {
     );
     pb.set_message("Generating DOT files...");
 
+    let adapter_count = config.adapters.len();
     for (adapter_name, graph) in all_graphs {
         pb.set_message(format!("Generating DOT for {}...", adapter_name));
         let dot_content = generate_dot(&graph, &adapter_name)?;
-        
+
         // Определяем путь для сохранения
         let output_path = if config.output.path.ends_with(".dot") {
-            PathBuf::from(&config.output.path)
+            let base_path = PathBuf::from(&config.output.path);
+            if adapter_count > 1 {
+                let stem = base_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("graph");
+                let safe_adapter_name =
+                    adapter_name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
+                let parent = base_path
+                    .parent()
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| PathBuf::from("."));
+                parent.join(format!("{}-{}.dot", stem, safe_adapter_name))
+            } else {
+                base_path
+            }
         } else {
             PathBuf::from(&config.output.path).join(format!("{}.dot", adapter_name))
         };
@@ -98,7 +118,7 @@ pub fn execute_visualize(config_path: &str) -> Result<()> {
 /// Генерирует DOT формат из графа
 fn generate_dot(graph: &CallGraph, graph_name: &str) -> Result<String> {
     let mut dot = String::new();
-    
+
     // Заголовок DOT
     dot.push_str(&format!("digraph {} {{\n", graph_name.replace("-", "_")));
     dot.push_str("  rankdir=LR;\n");
@@ -150,7 +170,10 @@ fn generate_dot(graph: &CallGraph, graph_name: &str) -> Result<String> {
 fn format_node_label(node: &CallNode) -> String {
     match node {
         CallNode::Module { path } => {
-            format!("Module: {}", path.file_name().unwrap_or_default().to_string_lossy())
+            format!(
+                "Module: {}",
+                path.file_name().unwrap_or_default().to_string_lossy()
+            )
         }
         CallNode::Function { name, line, .. } => {
             format!("Function: {}\n(line {})", name, line)
@@ -182,7 +205,9 @@ fn format_edge_label(edge: &CallEdge) -> String {
         CallEdge::Import { import_path, .. } => {
             format!("import: {}", import_path)
         }
-        CallEdge::Call { argument_mapping, .. } => {
+        CallEdge::Call {
+            argument_mapping, ..
+        } => {
             if argument_mapping.is_empty() {
                 "calls".to_string()
             } else {

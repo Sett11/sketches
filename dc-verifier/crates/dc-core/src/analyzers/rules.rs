@@ -87,13 +87,9 @@ impl ContractRule for MissingFieldRule {
                     mismatch_type: MismatchType::MissingField,
                     path: required_field.clone(),
                     expected: TypeInfo {
-                        base_type: to_field
-                            .map(|f| f.base_type)
-                            .unwrap_or(BaseType::Unknown),
+                        base_type: to_field.map(|f| f.base_type).unwrap_or(BaseType::Unknown),
                         schema_ref: None,
-                        constraints: to_field
-                            .map(|f| f.constraints.clone())
-                            .unwrap_or_default(),
+                        constraints: to_field.map(|f| f.constraints.clone()).unwrap_or_default(),
                         optional: false, // Обязательное поле
                     },
                     actual: TypeInfo {

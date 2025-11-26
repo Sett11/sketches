@@ -19,7 +19,9 @@ impl OpenApiParser {
         let mut endpoints = Vec::new();
 
         // Валидные HTTP методы (case-insensitive)
-        let valid_methods = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
+        let valid_methods = [
+            "get", "put", "post", "delete", "options", "head", "patch", "trace",
+        ];
 
         if let Some(paths) = self.spec.get("paths").and_then(|p| p.as_object()) {
             for (path, path_item) in paths {
@@ -30,7 +32,7 @@ impl OpenApiParser {
                         if !valid_methods.contains(&method_lower.as_str()) {
                             continue;
                         }
-                        
+
                         if let Some(operation_obj) = operation.as_object() {
                             endpoints.push(ApiEndpoint {
                                 path: path.clone(),
@@ -134,7 +136,7 @@ mod tests {
 
         let parser = OpenApiParser::from_json(&spec_json.to_string()).unwrap();
         let endpoints = parser.extract_endpoints();
-        
+
         assert_eq!(endpoints.len(), 1);
         assert_eq!(endpoints[0].path, "/users");
         assert_eq!(endpoints[0].method, "GET");
@@ -161,7 +163,7 @@ mod tests {
 
         let parser = OpenApiParser::from_json(&spec_json.to_string()).unwrap();
         let endpoints = parser.extract_endpoints();
-        
+
         assert_eq!(endpoints.len(), 2);
         let methods: Vec<&str> = endpoints.iter().map(|e| e.method.as_str()).collect();
         assert!(methods.contains(&"GET"));
@@ -183,7 +185,7 @@ mod tests {
 
         let parser = OpenApiParser::from_json(&spec_json.to_string()).unwrap();
         let endpoints = parser.extract_endpoints();
-        
+
         assert_eq!(endpoints.len(), 1);
         assert_eq!(endpoints[0].operation_id, None);
         assert_eq!(endpoints[0].request_schema, None);
@@ -241,7 +243,7 @@ mod tests {
 
         let parser = OpenApiParser::from_json(&spec_json.to_string()).unwrap();
         let endpoints = parser.extract_endpoints();
-        
+
         // Должен быть только один endpoint (get), не-методы должны быть пропущены
         assert_eq!(endpoints.len(), 1);
         assert_eq!(endpoints[0].method, "GET");

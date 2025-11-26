@@ -39,4 +39,3 @@ fn bench_call_graph_building(c: &mut Criterion) {
 
 criterion_group!(benches, bench_call_graph_building);
 criterion_main!(benches);
-

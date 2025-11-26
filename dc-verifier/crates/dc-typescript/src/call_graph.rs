@@ -80,104 +80,145 @@ impl TypeScriptCallGraphBuilder {
         if let Some(max_depth) = self.max_depth {
             if self.current_depth >= max_depth {
                 return Err(anyhow::Error::from(
-                    dc_core::error::GraphError::MaxDepthExceeded(max_depth)
+                    dc_core::error::GraphError::MaxDepthExceeded(max_depth),
                 ));
             }
         }
 
         self.current_depth += 1;
 
-        // Parse file
-        let (module, _source, converter) = self.parser.parse_file(&normalized)
-            .with_context(|| format!("Failed to parse {:?}", normalized))?;
+        let result = (|| -> Result<()> {
+            let (module, _source, converter) = self
+                .parser
+                .parse_file(&normalized)
+                .with_context(|| format!("Failed to parse {:?}", normalized))?;
 
-        // Создаем узел модуля
-        let module_node = self.get_or_create_module_node(&normalized)?;
-        self.processed_files.insert(normalized.clone());
+            // Создаем узел модуля
+            let module_node = self.get_or_create_module_node(&normalized)?;
+            self.processed_files.insert(normalized.clone());
 
-        let file_path_str = normalized.to_string_lossy().to_string();
+            let file_path_str = normalized.to_string_lossy().to_string();
 
-        // Извлекаем импорты
-        let imports = self.parser.extract_imports(&module, &file_path_str, &converter);
-        for import in imports {
-            if let Err(err) = self.process_import(module_node, &import, &normalized) {
-                eprintln!("Ошибка при обработке импорта '{}' из {:?}: {}", import.path, normalized, err);
-            }
-        }
-
-        // Извлекаем вызовы
-        let calls = self.parser.extract_calls(&module, &file_path_str, &converter);
-        for call in calls {
-            if let Err(err) = self.process_call(module_node, &call, &normalized) {
-                eprintln!("Ошибка при обработке вызова '{}' из {:?}: {}", call.name, normalized, err);
-            }
-        }
-
-        // Извлекаем функции и классы
-        let functions_and_classes = self.parser.extract_functions_and_classes(&module, &file_path_str, &converter);
-        for item in functions_and_classes {
-            match item {
-                dc_core::parsers::FunctionOrClass::Function { name, line, parameters, return_type, is_async, .. } => {
-                    let function_node = self.get_or_create_function_node_with_details(&name, &normalized, line, parameters, return_type, is_async);
-                    // Связываем функцию с модулем
-                    self.graph.add_edge(
-                        *module_node,
-                        *function_node,
-                        CallEdge::Call {
-                            caller: module_node,
-                            callee: function_node,
-                            argument_mapping: Vec::new(),
-                            location: dc_core::models::Location {
-                                file: file_path_str.clone(),
-                                line,
-                                column: None,
-                            },
-                        },
+            // Извлекаем импорты
+            let imports = self
+                .parser
+                .extract_imports(&module, &file_path_str, &converter);
+            for import in imports {
+                if let Err(err) = self.process_import(module_node, &import, &normalized) {
+                    eprintln!(
+                        "Ошибка при обработке импорта '{}' из {:?}: {}",
+                        import.path, normalized, err
                     );
                 }
-                dc_core::parsers::FunctionOrClass::Class { name, line, methods, .. } => {
-                    let class_node = self.get_or_create_class_node(&name, &normalized, line);
-                    // Связываем класс с модулем
-                    self.graph.add_edge(
-                        *module_node,
-                        *class_node,
-                        CallEdge::Call {
-                            caller: module_node,
-                            callee: class_node,
-                            argument_mapping: Vec::new(),
-                            location: dc_core::models::Location {
-                                file: file_path_str.clone(),
-                                line,
-                                column: None,
-                            },
-                        },
+            }
+
+            // Извлекаем вызовы
+            let calls = self
+                .parser
+                .extract_calls(&module, &file_path_str, &converter);
+            for call in calls {
+                if let Err(err) = self.process_call(module_node, &call, &normalized) {
+                    eprintln!(
+                        "Ошибка при обработке вызова '{}' из {:?}: {}",
+                        call.name, normalized, err
                     );
-                    
-                    // Обрабатываем методы класса
-                    for method in methods {
-                        let method_node = self.get_or_create_method_node(&method.name, class_node, &normalized, method.line, method.parameters, method.return_type, method.is_async, method.is_static);
-                        // Связываем метод с классом
+                }
+            }
+
+            // Извлекаем функции и классы
+            let functions_and_classes =
+                self.parser
+                    .extract_functions_and_classes(&module, &file_path_str, &converter);
+            for item in functions_and_classes {
+                match item {
+                    dc_core::parsers::FunctionOrClass::Function {
+                        name,
+                        line,
+                        parameters,
+                        return_type,
+                        is_async,
+                        ..
+                    } => {
+                        let function_node = self.get_or_create_function_node_with_details(
+                            &name,
+                            &normalized,
+                            line,
+                            parameters,
+                            return_type,
+                            is_async,
+                        );
                         self.graph.add_edge(
-                            *class_node,
-                            *method_node,
+                            *module_node,
+                            *function_node,
                             CallEdge::Call {
-                                caller: class_node,
-                                callee: method_node,
+                                caller: module_node,
+                                callee: function_node,
                                 argument_mapping: Vec::new(),
                                 location: dc_core::models::Location {
                                     file: file_path_str.clone(),
-                                    line: method.line,
+                                    line,
                                     column: None,
                                 },
                             },
                         );
                     }
+                    dc_core::parsers::FunctionOrClass::Class {
+                        name,
+                        line,
+                        methods,
+                        ..
+                    } => {
+                        let class_node = self.get_or_create_class_node(&name, &normalized, line);
+                        self.graph.add_edge(
+                            *module_node,
+                            *class_node,
+                            CallEdge::Call {
+                                caller: module_node,
+                                callee: class_node,
+                                argument_mapping: Vec::new(),
+                                location: dc_core::models::Location {
+                                    file: file_path_str.clone(),
+                                    line,
+                                    column: None,
+                                },
+                            },
+                        );
+
+                        for method in methods {
+                            let method_node = self.get_or_create_method_node(
+                                &method.name,
+                                class_node,
+                                &normalized,
+                                method.line,
+                                method.parameters,
+                                method.return_type,
+                                method.is_async,
+                                method.is_static,
+                            );
+                            self.graph.add_edge(
+                                *class_node,
+                                *method_node,
+                                CallEdge::Call {
+                                    caller: class_node,
+                                    callee: method_node,
+                                    argument_mapping: Vec::new(),
+                                    location: dc_core::models::Location {
+                                        file: file_path_str.clone(),
+                                        line: method.line,
+                                        column: None,
+                                    },
+                                },
+                            );
+                        }
+                    }
                 }
             }
-        }
+
+            Ok(())
+        })();
 
         self.current_depth -= 1;
-        Ok(())
+        result
     }
 
     /// Обрабатывает импорт
@@ -190,12 +231,13 @@ impl TypeScriptCallGraphBuilder {
         let import_path = match self.resolve_import_path(&import.path, current_file) {
             Ok(path) => path,
             Err(err) => {
-                // Пропускаем внешние модули (node_modules)
-                if import.path.starts_with('.') || !import.path.contains('/') {
+                if import.path.starts_with('.') {
                     return Err(err);
                 }
-                // Для внешних модулей создаем виртуальный узел
-                return Ok(from);
+                if !import.path.contains('/') || import.path.starts_with('@') {
+                    return Ok(from);
+                }
+                return Err(err);
             }
         };
 
@@ -229,7 +271,8 @@ impl TypeScriptCallGraphBuilder {
         current_file: &Path,
     ) -> Result<NodeId> {
         // Пытаемся найти функцию в текущем файле или других обработанных файлах
-        let callee_node = self.find_function_node(&call.name, current_file)
+        let callee_node = self
+            .find_function_node(&call.name, current_file)
             .unwrap_or_else(|| {
                 // Если функция не найдена, создаем виртуальный узел
                 self.get_or_create_function_node(&call.name, current_file)
@@ -311,11 +354,18 @@ impl TypeScriptCallGraphBuilder {
 
     /// Получает или создает узел класса
     fn get_or_create_class_node(&mut self, name: &str, file: &Path, _line: usize) -> NodeId {
-        let _key = format!("{}::class::{}", Self::normalize_path(file).to_string_lossy(), name);
-        
+        let _key = format!(
+            "{}::class::{}",
+            Self::normalize_path(file).to_string_lossy(),
+            name
+        );
+
         // Проверяем, есть ли уже узел класса
         for (node_idx, node) in self.graph.node_indices().zip(self.graph.node_weights()) {
-            if let CallNode::Class { name: node_name, .. } = node {
+            if let CallNode::Class {
+                name: node_name, ..
+            } = node
+            {
                 if node_name == name {
                     return NodeId::from(node_idx);
                 }
@@ -342,11 +392,20 @@ impl TypeScriptCallGraphBuilder {
         _is_async: bool,
         _is_static: bool,
     ) -> NodeId {
-        let _key = format!("{}::method::{}", Self::normalize_path(file).to_string_lossy(), name);
-        
+        let _key = format!(
+            "{}::method::{}",
+            Self::normalize_path(file).to_string_lossy(),
+            name
+        );
+
         // Проверяем, есть ли уже узел метода
         for (node_idx, node) in self.graph.node_indices().zip(self.graph.node_weights()) {
-            if let CallNode::Method { name: node_name, class: node_class, .. } = node {
+            if let CallNode::Method {
+                name: node_name,
+                class: node_class,
+                ..
+            } = node
+            {
                 if node_name == name && *node_class == class {
                     return NodeId::from(node_idx);
                 }
@@ -359,14 +418,14 @@ impl TypeScriptCallGraphBuilder {
             parameters,
             return_type,
         }));
-        
+
         // Обновляем список методов класса
         if let Some(class_node) = self.graph.node_weight_mut(*class) {
             if let CallNode::Class { methods, .. } = class_node {
                 methods.push(node);
             }
         }
-        
+
         node
     }
 

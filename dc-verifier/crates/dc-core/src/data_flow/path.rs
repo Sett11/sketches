@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 pub enum DataPathError {
     /// Попытка установить пустой список узлов
     EmptyNodes,
+    /// Попытка установить путь короче двух узлов
+    InsufficientNodes,
 }
 
 /// Путь данных через граф вызовов
@@ -56,14 +58,16 @@ impl DataPath {
     }
 
     /// Устанавливает последовательность узлов с сохранением консистентности
-    /// 
+    ///
     /// # Ошибки
-    /// 
-    /// Возвращает `Err(DataPathError::EmptyNodes)`, если передан пустой список узлов.
-    /// Путь данных должен содержать хотя бы один узел.
+    ///
+    /// Возвращает `Err(DataPathError::InsufficientNodes)`, если передано меньше двух узлов.
     pub fn set_nodes(&mut self, nodes: Vec<NodeId>) -> Result<(), DataPathError> {
         if nodes.is_empty() {
             return Err(DataPathError::EmptyNodes);
+        }
+        if nodes.len() < 2 {
+            return Err(DataPathError::InsufficientNodes);
         }
         self.nodes = nodes;
         Ok(())

@@ -79,18 +79,21 @@ impl<'a> DataFlowTracker<'a> {
 
         // Находим все узлы, которые вызывают эту функцию
         let callers = crate::call_graph::incoming_nodes(self.graph, func);
-        
+
         for caller in callers {
             // Проверяем, передается ли параметр через вызов
             if let Some(edge) = self.graph.edges_connecting(*caller, *func).next() {
-                if let crate::call_graph::CallEdge::Call { argument_mapping, .. } = edge.weight() {
+                if let crate::call_graph::CallEdge::Call {
+                    argument_mapping, ..
+                } = edge.weight()
+                {
                     // Ищем параметр в маппинге аргументов
                     for (param, var_name) in argument_mapping {
                         if param == param_name || var_name == param_name {
                             let mut path = DataPath::new(caller, func, param_var.clone());
                             path.push_node(caller);
                             paths.push(path);
-                            
+
                             // Рекурсивно отслеживаем дальше
                             self.track_parameter_recursive(
                                 param_name,
@@ -123,7 +126,10 @@ impl<'a> DataFlowTracker<'a> {
         for neighbor in crate::call_graph::outgoing_nodes(self.graph, current) {
             // Проверяем, используется ли параметр в вызове
             if let Some(edge) = self.graph.edges_connecting(*current, *neighbor).next() {
-                if let crate::call_graph::CallEdge::Call { argument_mapping, .. } = edge.weight() {
+                if let crate::call_graph::CallEdge::Call {
+                    argument_mapping, ..
+                } = edge.weight()
+                {
                     for (_param, var_name) in argument_mapping {
                         if var_name == param_name {
                             let param_var = Self::create_param_variable(param_name);
@@ -150,7 +156,7 @@ impl<'a> DataFlowTracker<'a> {
 
         // Находим все узлы, которые вызывают эту функцию
         let callers = crate::call_graph::incoming_nodes(self.graph, func);
-        
+
         for caller in callers {
             // Создаем путь от функции к вызывающему узлу
             let mut path = DataPath::new(func, caller, return_var.clone());

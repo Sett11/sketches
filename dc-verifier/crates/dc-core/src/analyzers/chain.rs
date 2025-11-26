@@ -36,7 +36,8 @@ impl<'a> ChainBuilder<'a> {
         let mut chains = Vec::new();
 
         // Находим все routes (точки входа API)
-        let routes = crate::call_graph::find_nodes(&self.graph, |n| matches!(n, CallNode::Route { .. }));
+        let routes =
+            crate::call_graph::find_nodes(&self.graph, |n| matches!(n, CallNode::Route { .. }));
 
         for route in routes {
             // Строим цепочку Frontend → Backend → Database
@@ -56,7 +57,9 @@ impl<'a> ChainBuilder<'a> {
     /// Строит цепочку Frontend → Backend → Database
     pub fn build_forward_chain(&self, start: NodeId) -> Result<DataChain> {
         self.ensure_node_exists(start)?;
-        let path = self.collect_path(start, |node| crate::call_graph::outgoing_nodes(&self.graph, node));
+        let path = self.collect_path(start, |node| {
+            crate::call_graph::outgoing_nodes(&self.graph, node)
+        });
 
         if path.is_empty() {
             bail!("Не удалось построить прямую цепочку: пустой путь");
@@ -77,7 +80,9 @@ impl<'a> ChainBuilder<'a> {
     /// Строит цепочку Database → Backend → Frontend
     pub fn build_reverse_chain(&self, start: NodeId) -> Result<DataChain> {
         self.ensure_node_exists(start)?;
-        let mut path = self.collect_path(start, |node| crate::call_graph::incoming_nodes(&self.graph, node));
+        let mut path = self.collect_path(start, |node| {
+            crate::call_graph::incoming_nodes(&self.graph, node)
+        });
         if path.is_empty() {
             bail!("Не удалось построить обратную цепочку: пустой путь");
         }

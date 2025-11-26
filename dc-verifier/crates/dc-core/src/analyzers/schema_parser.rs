@@ -55,12 +55,12 @@ impl SchemaParser {
             // Используем полную JSON схему
             let json_value: Value = serde_json::from_str(json_schema_str)?;
             let mut schema = Self::parse_json_value(&json_value)?;
-            
+
             // Синхронизируем optional флаги с required
             for (field_name, field_info) in schema.properties.iter_mut() {
                 field_info.optional = !schema.required.contains(field_name);
             }
-            
+
             return Ok(schema);
         }
 
@@ -86,17 +86,17 @@ impl SchemaParser {
                 if field.is_empty() {
                     continue;
                 }
-                
+
                 // Разделяем только по первому ':'
                 if let Some(colon_pos) = field.find(':') {
                     let name = field[..colon_pos].trim().to_string();
                     let field_type = field[colon_pos + 1..].trim().to_string();
-                    
+
                     // Пропускаем пустые имена или типы
                     if name.is_empty() || field_type.is_empty() {
                         continue;
                     }
-                    
+
                     properties.insert(
                         name.clone(),
                         FieldInfo {
@@ -110,7 +110,7 @@ impl SchemaParser {
                 }
             }
         }
-        
+
         // Синхронизируем optional и required: если required пустой, все поля optional=true
         // Иначе устанавливаем optional=false для полей в required
         if required.is_empty() {
@@ -154,12 +154,12 @@ impl SchemaParser {
         if let Some(json_schema_str) = schema_ref.metadata.get("json_schema") {
             let json_value: Value = serde_json::from_str(json_schema_str)?;
             let mut schema = Self::parse_json_value(&json_value)?;
-            
+
             // Синхронизируем optional флаги с required
             for (field_name, field_info) in schema.properties.iter_mut() {
                 field_info.optional = !schema.required.contains(field_name);
             }
-            
+
             return Ok(schema);
         }
 
@@ -173,14 +173,17 @@ impl SchemaParser {
                 if field.is_empty() {
                     continue;
                 }
-                
+
                 // Разделяем по ':'
                 let parts: Vec<&str> = field.split(':').collect();
                 if parts.len() >= 2 {
                     let name = parts[0].trim().to_string();
                     let field_type = parts[1].trim().to_string();
-                    let optional = parts.get(2).map(|s| s.trim() == "optional").unwrap_or(false);
-                    
+                    let optional = parts
+                        .get(2)
+                        .map(|s| s.trim() == "optional")
+                        .unwrap_or(false);
+
                     if !name.is_empty() && !field_type.is_empty() {
                         let base_type = Self::base_type_from_string(&field_type);
                         let field_info = FieldInfo {
@@ -191,7 +194,7 @@ impl SchemaParser {
                             nested_schema: None,
                         };
                         properties.insert(name.clone(), field_info);
-                        
+
                         if !optional {
                             required.push(name);
                         }
@@ -387,4 +390,3 @@ impl SchemaParser {
         }
     }
 }
-

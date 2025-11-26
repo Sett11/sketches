@@ -24,15 +24,18 @@ where
 
 /// Находит узел по имени функции/класса
 pub fn find_node_by_name(graph: &CallGraph, name: &str) -> Option<NodeId> {
-    graph.node_indices().find(|&idx| {
-        graph.node_weight(idx).and_then(|node| match node {
-            CallNode::Function { name: n, .. } => Some(n == name),
-            CallNode::Class { name: n, .. } => Some(n == name),
-            CallNode::Method { name: n, .. } => Some(n == name),
-            CallNode::Route { .. } => None,
-            CallNode::Module { .. } => None,
-        }) == Some(true)
-    }).map(NodeId::from)
+    graph
+        .node_indices()
+        .find(|&idx| {
+            graph.node_weight(idx).and_then(|node| match node {
+                CallNode::Function { name: n, .. } => Some(n == name),
+                CallNode::Class { name: n, .. } => Some(n == name),
+                CallNode::Method { name: n, .. } => Some(n == name),
+                CallNode::Route { .. } => None,
+                CallNode::Module { .. } => None,
+            }) == Some(true)
+        })
+        .map(NodeId::from)
 }
 
 /// Получает все входящие узлы (кто вызывает этот узел)

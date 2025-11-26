@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::path::Path;
 use swc_common::{sync::Lrc, FileName, SourceMap};
 use swc_ecma_ast::*;
-use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
+use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
 
 /// Парсер TypeScript через swc
 pub struct SwcParser {
@@ -31,11 +31,10 @@ impl SwcParser {
             .new_source_file(file_name, source.to_string());
 
         let is_tsx = path.extension().and_then(|e| e.to_str()) == Some("tsx");
-        let syntax = if is_tsx {
-            Syntax::Typescript(Default::default())
-        } else {
-            Syntax::Typescript(Default::default())
-        };
+        let syntax = Syntax::Typescript(TsSyntax {
+            tsx: is_tsx,
+            ..Default::default()
+        });
 
         let lexer = Lexer::new(syntax, Default::default(), StringInput::from(&*fm), None);
         let mut parser = Parser::new_from(lexer);

@@ -27,7 +27,7 @@ impl FastApiExtractor {
                 anyhow::anyhow!("App path contains invalid UTF-8: {:?}", self.app_path)
             })?;
             let spec = spec_from_file.call1(("app", app_path_str))?;
-            
+
             // Получаем loader до перемещения spec
             let loader = spec.getattr("loader")?;
             let module = module_from_spec.call1((spec,))?;
@@ -49,11 +49,11 @@ impl FastApiExtractor {
             let routes_list: Vec<Py<PyAny>> = routes.extract()?;
 
             let mut result = Vec::new();
-            
+
             // Импортируем APIRoute для проверки типа
             let fastapi_routing = py.import("fastapi.routing")?;
             let api_route_class = fastapi_routing.getattr("APIRoute")?;
-            
+
             // Импортируем inspect для получения информации о файле
             let inspect = py.import("inspect")?;
             let getfile = inspect.getattr("getfile")?;
@@ -61,7 +61,7 @@ impl FastApiExtractor {
 
             for route in routes_list {
                 let route_bound = route.bind(py);
-                
+
                 // Проверяем, является ли это APIRoute
                 let is_api_route = route_bound.is_instance(api_route_class.as_ref())?;
                 if !is_api_route {
@@ -70,7 +70,7 @@ impl FastApiExtractor {
 
                 // Извлекаем path
                 let path: String = route_bound.getattr("path")?.extract()?;
-                
+
                 // Извлекаем methods
                 let methods_attr = route_bound.getattr("methods")?;
                 let methods: Option<Vec<String>> = methods_attr.extract().ok();
@@ -87,7 +87,7 @@ impl FastApiExtractor {
                     Ok(file_obj) => {
                         let file_str: String = file_obj.extract()?;
                         let file_path = PathBuf::from(file_str);
-                        
+
                         // Получаем номер строки
                         let line = match getsourcelines.call1((endpoint,)) {
                             Ok(lines_tuple) => {
@@ -96,7 +96,7 @@ impl FastApiExtractor {
                             }
                             Err(_) => 0,
                         };
-                        
+
                         (file_path, line)
                     }
                     Err(_) => {

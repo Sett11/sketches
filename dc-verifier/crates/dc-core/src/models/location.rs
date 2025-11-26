@@ -10,4 +10,3 @@ pub struct Location {
     /// Номер колонки (опционально, 1-based)
     pub column: Option<usize>,
 }
-

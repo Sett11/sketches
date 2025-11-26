@@ -4,7 +4,7 @@ use anyhow::Result;
 use std::path::Path;
 use swc_common::{sync::Lrc, FileName, SourceMap};
 use swc_ecma_ast::*;
-use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
+use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
 
 /// Парсер TypeScript кода с анализом вызовов (через swc)
 pub struct TypeScriptParser {
@@ -35,11 +35,10 @@ impl TypeScriptParser {
             .new_source_file(file_name, source.to_string());
 
         let is_tsx = path.extension().and_then(|e| e.to_str()) == Some("tsx");
-        let syntax = if is_tsx {
-            Syntax::Typescript(Default::default())
-        } else {
-            Syntax::Typescript(Default::default())
-        };
+        let syntax = Syntax::Typescript(TsSyntax {
+            tsx: is_tsx,
+            ..Default::default()
+        });
 
         let lexer = Lexer::new(syntax, Default::default(), StringInput::from(&*fm), None);
         let mut parser = Parser::new_from(lexer);
@@ -290,22 +289,58 @@ impl TypeScriptParser {
                 }
             }
             Expr::Member(member_expr) => {
-                self.walk_expr(member_expr.obj.as_ref(), context, calls, file_path, converter);
+                self.walk_expr(
+                    member_expr.obj.as_ref(),
+                    context,
+                    calls,
+                    file_path,
+                    converter,
+                );
             }
             Expr::Bin(bin_expr) => {
                 self.walk_expr(bin_expr.left.as_ref(), context, calls, file_path, converter);
-                self.walk_expr(bin_expr.right.as_ref(), context, calls, file_path, converter);
+                self.walk_expr(
+                    bin_expr.right.as_ref(),
+                    context,
+                    calls,
+                    file_path,
+                    converter,
+                );
             }
             Expr::Unary(unary_expr) => {
-                self.walk_expr(unary_expr.arg.as_ref(), context, calls, file_path, converter);
+                self.walk_expr(
+                    unary_expr.arg.as_ref(),
+                    context,
+                    calls,
+                    file_path,
+                    converter,
+                );
             }
             Expr::Cond(cond_expr) => {
-                self.walk_expr(cond_expr.test.as_ref(), context, calls, file_path, converter);
-                self.walk_expr(cond_expr.cons.as_ref(), context, calls, file_path, converter);
+                self.walk_expr(
+                    cond_expr.test.as_ref(),
+                    context,
+                    calls,
+                    file_path,
+                    converter,
+                );
+                self.walk_expr(
+                    cond_expr.cons.as_ref(),
+                    context,
+                    calls,
+                    file_path,
+                    converter,
+                );
                 self.walk_expr(cond_expr.alt.as_ref(), context, calls, file_path, converter);
             }
             Expr::Assign(assign_expr) => {
-                self.walk_expr(assign_expr.right.as_ref(), context, calls, file_path, converter);
+                self.walk_expr(
+                    assign_expr.right.as_ref(),
+                    context,
+                    calls,
+                    file_path,
+                    converter,
+                );
             }
             _ => {}
         }
@@ -373,13 +408,13 @@ impl TypeScriptParser {
                 let base = self.expr_to_string(member_expr.obj.as_ref());
                 let prop = match &member_expr.prop {
                     MemberProp::Ident(ident) => ident.sym.as_ref().to_string(),
-                        MemberProp::Computed(computed) => {
-                            if let Expr::Lit(Lit::Str(str)) = computed.expr.as_ref() {
-                                format!("[{}]", str.value.as_str().unwrap_or(""))
-                            } else {
-                                "[...]".to_string()
-                            }
+                    MemberProp::Computed(computed) => {
+                        if let Expr::Lit(Lit::Str(str)) = computed.expr.as_ref() {
+                            format!("[{}]", str.value.as_str().unwrap_or(""))
+                        } else {
+                            "[...]".to_string()
                         }
+                    }
                     _ => "?".to_string(),
                 };
                 format!("{}.{}", base, prop)
@@ -410,7 +445,7 @@ impl TypeScriptParser {
         converter: &LocationConverter,
     ) -> Vec<SchemaReference> {
         let mut schemas = Vec::new();
-        
+
         // Сначала извлекаем TypeScript схемы для связи с Zod
         let ts_schemas = self.extract_typescript_schemas(module, file_path, converter);
         let mut ts_schema_map = std::collections::HashMap::new();
@@ -446,18 +481,19 @@ impl TypeScriptParser {
                                         converter.byte_offset_to_location(span.lo.0 as usize);
 
                                     let schema_name = match &decl.name {
-                                        Pat::Ident(ident) => {
-                                            ident.id.sym.as_ref().to_string()
-                                        }
+                                        Pat::Ident(ident) => ident.id.sym.as_ref().to_string(),
                                         _ => "ZodSchema".to_string(),
                                     };
 
                                     let mut metadata = std::collections::HashMap::new();
-                                    
+
                                     // Пытаемся найти связанный TypeScript тип
                                     if let Some(ts_schema) = ts_schema_map.get(&schema_name) {
                                         // Связываем Zod схему с TypeScript типом
-                                        metadata.insert("typescript_type".to_string(), ts_schema.name.clone());
+                                        metadata.insert(
+                                            "typescript_type".to_string(),
+                                            ts_schema.name.clone(),
+                                        );
                                         // Копируем поля из TypeScript схемы, если они есть
                                         if let Some(fields) = ts_schema.metadata.get("fields") {
                                             metadata.insert("fields".to_string(), fields.clone());
@@ -489,7 +525,7 @@ impl TypeScriptParser {
                                 converter.byte_offset_to_location(span.lo.0 as usize);
 
                             let metadata = std::collections::HashMap::new();
-                            
+
                             schemas.push(SchemaReference {
                                 name: "ZodSchema".to_string(),
                                 schema_type: SchemaType::Zod,
@@ -576,14 +612,14 @@ impl TypeScriptParser {
                     Decl::TsInterface(ts_interface) => {
                         let span = ts_interface.span;
                         let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                        
+
                         let name = ts_interface.id.sym.as_ref().to_string();
                         let base_type = crate::models::BaseType::Object;
-                        
+
                         // Извлекаем свойства интерфейса
                         let mut metadata = std::collections::HashMap::new();
                         let mut fields = Vec::new();
-                        
+
                         for member in &ts_interface.body.body {
                             if let swc_ecma_ast::TsTypeElement::TsPropertySignature(prop) = member {
                                 let field_name = self.ts_property_key_to_string(&prop.key);
@@ -593,11 +629,11 @@ impl TypeScriptParser {
                                 }
                             }
                         }
-                        
+
                         if !fields.is_empty() {
                             metadata.insert("fields".to_string(), fields.join(","));
                         }
-                        
+
                         let schema_ref = SchemaReference {
                             name: name.clone(),
                             schema_type: SchemaType::TypeScript,
@@ -608,7 +644,7 @@ impl TypeScriptParser {
                             },
                             metadata,
                         };
-                        
+
                         types.push(TypeInfo {
                             base_type,
                             schema_ref: Some(schema_ref),
@@ -619,10 +655,10 @@ impl TypeScriptParser {
                     Decl::TsTypeAlias(ts_type_alias) => {
                         let span = ts_type_alias.span;
                         let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                        
-                let name = ts_type_alias.id.sym.as_ref().to_string();
-                let base_type = self.ts_type_to_base_type(ts_type_alias.type_ann.as_ref());
-                        
+
+                        let name = ts_type_alias.id.sym.as_ref().to_string();
+                        let base_type = self.ts_type_to_base_type(ts_type_alias.type_ann.as_ref());
+
                         let schema_ref = SchemaReference {
                             name: name.clone(),
                             schema_type: SchemaType::TypeScript,
@@ -633,7 +669,7 @@ impl TypeScriptParser {
                             },
                             metadata: std::collections::HashMap::new(),
                         };
-                        
+
                         types.push(TypeInfo {
                             base_type,
                             schema_ref: Some(schema_ref),
@@ -647,13 +683,13 @@ impl TypeScriptParser {
             ModuleItem::Stmt(Stmt::Decl(Decl::TsInterface(ts_interface))) => {
                 let span = ts_interface.span;
                 let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                
+
                 let name = ts_interface.id.sym.as_ref().to_string();
                 let base_type = crate::models::BaseType::Object;
-                
+
                 let mut metadata = std::collections::HashMap::new();
                 let mut fields = Vec::new();
-                
+
                 for member in &ts_interface.body.body {
                     if let swc_ecma_ast::TsTypeElement::TsPropertySignature(prop) = member {
                         let field_name = self.ts_property_key_to_string(&prop.key);
@@ -663,11 +699,11 @@ impl TypeScriptParser {
                         }
                     }
                 }
-                
+
                 if !fields.is_empty() {
                     metadata.insert("fields".to_string(), fields.join(","));
                 }
-                
+
                 let schema_ref = SchemaReference {
                     name: name.clone(),
                     schema_type: SchemaType::TypeScript,
@@ -678,7 +714,7 @@ impl TypeScriptParser {
                     },
                     metadata,
                 };
-                
+
                 types.push(TypeInfo {
                     base_type,
                     schema_ref: Some(schema_ref),
@@ -689,10 +725,10 @@ impl TypeScriptParser {
             ModuleItem::Stmt(Stmt::Decl(Decl::TsTypeAlias(ts_type_alias))) => {
                 let span = ts_type_alias.span;
                 let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                
+
                 let name = ts_type_alias.id.sym.as_ref().to_string();
                 let base_type = self.ts_type_to_base_type(ts_type_alias.type_ann.as_ref());
-                
+
                 let schema_ref = SchemaReference {
                     name: name.clone(),
                     schema_type: SchemaType::TypeScript,
@@ -703,7 +739,7 @@ impl TypeScriptParser {
                     },
                     metadata: std::collections::HashMap::new(),
                 };
-                
+
                 types.push(TypeInfo {
                     base_type,
                     schema_ref: Some(schema_ref),
@@ -729,26 +765,31 @@ impl TypeScriptParser {
                     Decl::TsInterface(ts_interface) => {
                         let span = ts_interface.span;
                         let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                        
+
                         let name = ts_interface.id.sym.as_ref().to_string();
                         let mut metadata = std::collections::HashMap::new();
                         let mut fields = Vec::new();
-                        
+
                         for member in &ts_interface.body.body {
                             if let swc_ecma_ast::TsTypeElement::TsPropertySignature(prop) = member {
                                 let field_name = self.ts_property_key_to_string(&prop.key);
                                 if let Some(type_ann) = &prop.type_ann {
                                     let field_type = self.ts_type_ann_to_string(type_ann);
                                     let optional = prop.optional;
-                                    fields.push(format!("{}:{}:{}", field_name, field_type, if optional { "optional" } else { "required" }));
+                                    fields.push(format!(
+                                        "{}:{}:{}",
+                                        field_name,
+                                        field_type,
+                                        if optional { "optional" } else { "required" }
+                                    ));
                                 }
                             }
                         }
-                        
+
                         if !fields.is_empty() {
                             metadata.insert("fields".to_string(), fields.join(","));
                         }
-                        
+
                         schemas.push(SchemaReference {
                             name,
                             schema_type: SchemaType::TypeScript,
@@ -763,13 +804,13 @@ impl TypeScriptParser {
                     Decl::TsTypeAlias(ts_type_alias) => {
                         let span = ts_type_alias.span;
                         let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                        
-                let name = ts_type_alias.id.sym.as_ref().to_string();
-                let type_str = self.ts_type_to_string(ts_type_alias.type_ann.as_ref());
-                        
+
+                        let name = ts_type_alias.id.sym.as_ref().to_string();
+                        let type_str = self.ts_type_to_string(ts_type_alias.type_ann.as_ref());
+
                         let mut metadata = std::collections::HashMap::new();
                         metadata.insert("type".to_string(), type_str);
-                        
+
                         schemas.push(SchemaReference {
                             name,
                             schema_type: SchemaType::TypeScript,
@@ -787,26 +828,31 @@ impl TypeScriptParser {
             ModuleItem::Stmt(Stmt::Decl(Decl::TsInterface(ts_interface))) => {
                 let span = ts_interface.span;
                 let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                
+
                 let name = ts_interface.id.sym.as_ref().to_string();
                 let mut metadata = std::collections::HashMap::new();
                 let mut fields = Vec::new();
-                
+
                 for member in &ts_interface.body.body {
                     if let swc_ecma_ast::TsTypeElement::TsPropertySignature(prop) = member {
                         let field_name = self.ts_property_key_to_string(&prop.key);
                         if let Some(type_ann) = &prop.type_ann {
                             let field_type = self.ts_type_ann_to_string(type_ann);
                             let optional = prop.optional;
-                            fields.push(format!("{}:{}:{}", field_name, field_type, if optional { "optional" } else { "required" }));
+                            fields.push(format!(
+                                "{}:{}:{}",
+                                field_name,
+                                field_type,
+                                if optional { "optional" } else { "required" }
+                            ));
                         }
                     }
                 }
-                
+
                 if !fields.is_empty() {
                     metadata.insert("fields".to_string(), fields.join(","));
                 }
-                
+
                 schemas.push(SchemaReference {
                     name,
                     schema_type: SchemaType::TypeScript,
@@ -821,13 +867,13 @@ impl TypeScriptParser {
             ModuleItem::Stmt(Stmt::Decl(Decl::TsTypeAlias(ts_type_alias))) => {
                 let span = ts_type_alias.span;
                 let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                
+
                 let name = ts_type_alias.id.sym.as_ref().to_string();
                 let type_str = self.ts_type_to_string(ts_type_alias.type_ann.as_ref());
-                
+
                 let mut metadata = std::collections::HashMap::new();
                 metadata.insert("type".to_string(), type_str);
-                
+
                 schemas.push(SchemaReference {
                     name,
                     schema_type: SchemaType::TypeScript,
@@ -851,40 +897,53 @@ impl TypeScriptParser {
     /// Преобразует TypeScript тип в строку
     fn ts_type_to_string(&self, ts_type: &swc_ecma_ast::TsType) -> String {
         match ts_type {
-            swc_ecma_ast::TsType::TsKeywordType(keyword) => {
-                match keyword.kind {
-                    swc_ecma_ast::TsKeywordTypeKind::TsStringKeyword => "string".to_string(),
-                    swc_ecma_ast::TsKeywordTypeKind::TsNumberKeyword => "number".to_string(),
-                    swc_ecma_ast::TsKeywordTypeKind::TsBooleanKeyword => "boolean".to_string(),
-                    swc_ecma_ast::TsKeywordTypeKind::TsAnyKeyword => "any".to_string(),
-                    swc_ecma_ast::TsKeywordTypeKind::TsUnknownKeyword => "unknown".to_string(),
-                    swc_ecma_ast::TsKeywordTypeKind::TsVoidKeyword => "void".to_string(),
-                    swc_ecma_ast::TsKeywordTypeKind::TsNullKeyword => "null".to_string(),
-                    swc_ecma_ast::TsKeywordTypeKind::TsUndefinedKeyword => "undefined".to_string(),
-                    swc_ecma_ast::TsKeywordTypeKind::TsNeverKeyword => "never".to_string(),
-                    _ => "unknown".to_string(),
+            swc_ecma_ast::TsType::TsKeywordType(keyword) => match keyword.kind {
+                swc_ecma_ast::TsKeywordTypeKind::TsStringKeyword => "string".to_string(),
+                swc_ecma_ast::TsKeywordTypeKind::TsNumberKeyword => "number".to_string(),
+                swc_ecma_ast::TsKeywordTypeKind::TsBooleanKeyword => "boolean".to_string(),
+                swc_ecma_ast::TsKeywordTypeKind::TsAnyKeyword => "any".to_string(),
+                swc_ecma_ast::TsKeywordTypeKind::TsUnknownKeyword => "unknown".to_string(),
+                swc_ecma_ast::TsKeywordTypeKind::TsVoidKeyword => "void".to_string(),
+                swc_ecma_ast::TsKeywordTypeKind::TsNullKeyword => "null".to_string(),
+                swc_ecma_ast::TsKeywordTypeKind::TsUndefinedKeyword => "undefined".to_string(),
+                swc_ecma_ast::TsKeywordTypeKind::TsNeverKeyword => "never".to_string(),
+                _ => "unknown".to_string(),
+            },
+            swc_ecma_ast::TsType::TsTypeRef(type_ref) => match &type_ref.type_name {
+                swc_ecma_ast::TsEntityName::Ident(ident) => ident.sym.as_ref().to_string(),
+                swc_ecma_ast::TsEntityName::TsQualifiedName(qualified) => {
+                    format!(
+                        "{}.{}",
+                        self.ts_entity_name_to_string(&qualified.left),
+                        qualified.right.sym.as_ref().to_string()
+                    )
                 }
-            }
-            swc_ecma_ast::TsType::TsTypeRef(type_ref) => {
-                match &type_ref.type_name {
-                    swc_ecma_ast::TsEntityName::Ident(ident) => ident.sym.as_ref().to_string(),
-                    swc_ecma_ast::TsEntityName::TsQualifiedName(qualified) => {
-                        format!("{}.{}", self.ts_entity_name_to_string(&qualified.left), qualified.right.sym.as_ref().to_string())
-                    }
-                }
-            }
+            },
             swc_ecma_ast::TsType::TsArrayType(array_type) => {
-                format!("{}[]", self.ts_type_to_string(array_type.elem_type.as_ref()))
+                format!(
+                    "{}[]",
+                    self.ts_type_to_string(array_type.elem_type.as_ref())
+                )
             }
             swc_ecma_ast::TsType::TsUnionOrIntersectionType(union) => {
                 // В SWC 18.0 структура может отличаться, используем match на тип
                 match union {
                     swc_ecma_ast::TsUnionOrIntersectionType::TsUnionType(union_type) => {
-                        let types: Vec<String> = union_type.types.iter().map(|t| self.ts_type_to_string(t)).collect();
+                        let types: Vec<String> = union_type
+                            .types
+                            .iter()
+                            .map(|t| self.ts_type_to_string(t))
+                            .collect();
                         types.join(" | ")
                     }
-                    swc_ecma_ast::TsUnionOrIntersectionType::TsIntersectionType(intersection_type) => {
-                        let types: Vec<String> = intersection_type.types.iter().map(|t| self.ts_type_to_string(t)).collect();
+                    swc_ecma_ast::TsUnionOrIntersectionType::TsIntersectionType(
+                        intersection_type,
+                    ) => {
+                        let types: Vec<String> = intersection_type
+                            .types
+                            .iter()
+                            .map(|t| self.ts_type_to_string(t))
+                            .collect();
                         types.join(" & ")
                     }
                 }
@@ -896,15 +955,15 @@ impl TypeScriptParser {
     /// Преобразует TypeScript тип в BaseType
     fn ts_type_to_base_type(&self, ts_type: &swc_ecma_ast::TsType) -> crate::models::BaseType {
         match ts_type {
-            swc_ecma_ast::TsType::TsKeywordType(keyword) => {
-                match keyword.kind {
-                    swc_ecma_ast::TsKeywordTypeKind::TsStringKeyword => crate::models::BaseType::String,
-                    swc_ecma_ast::TsKeywordTypeKind::TsNumberKeyword => crate::models::BaseType::Number,
-                    swc_ecma_ast::TsKeywordTypeKind::TsBooleanKeyword => crate::models::BaseType::Boolean,
-                    swc_ecma_ast::TsKeywordTypeKind::TsAnyKeyword => crate::models::BaseType::Any,
-                    _ => crate::models::BaseType::Unknown,
+            swc_ecma_ast::TsType::TsKeywordType(keyword) => match keyword.kind {
+                swc_ecma_ast::TsKeywordTypeKind::TsStringKeyword => crate::models::BaseType::String,
+                swc_ecma_ast::TsKeywordTypeKind::TsNumberKeyword => crate::models::BaseType::Number,
+                swc_ecma_ast::TsKeywordTypeKind::TsBooleanKeyword => {
+                    crate::models::BaseType::Boolean
                 }
-            }
+                swc_ecma_ast::TsKeywordTypeKind::TsAnyKeyword => crate::models::BaseType::Any,
+                _ => crate::models::BaseType::Unknown,
+            },
             swc_ecma_ast::TsType::TsArrayType(_) => crate::models::BaseType::Array,
             swc_ecma_ast::TsType::TsTypeRef(_) => crate::models::BaseType::Object,
             _ => crate::models::BaseType::Unknown,
@@ -916,7 +975,11 @@ impl TypeScriptParser {
         match entity_name {
             swc_ecma_ast::TsEntityName::Ident(ident) => ident.sym.as_ref().to_string(),
             swc_ecma_ast::TsEntityName::TsQualifiedName(qualified) => {
-                format!("{}.{}", self.ts_entity_name_to_string(&qualified.left), qualified.right.sym.as_ref().to_string())
+                format!(
+                    "{}.{}",
+                    self.ts_entity_name_to_string(&qualified.left),
+                    qualified.right.sym.as_ref().to_string()
+                )
             }
         }
     }
@@ -958,12 +1021,12 @@ impl TypeScriptParser {
             ModuleItem::Stmt(Stmt::Decl(Decl::Fn(fn_decl))) => {
                 let span = fn_decl.ident.span;
                 let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                
+
                 let name = fn_decl.ident.sym.as_ref().to_string();
                 let parameters = self.extract_function_parameters(&fn_decl.function);
                 let return_type = self.extract_return_type(&fn_decl.function);
                 let is_async = fn_decl.function.is_async;
-                
+
                 result.push(FunctionOrClass::Function {
                     name,
                     line,
@@ -976,10 +1039,10 @@ impl TypeScriptParser {
             ModuleItem::Stmt(Stmt::Decl(Decl::Class(class_decl))) => {
                 let span = class_decl.ident.span;
                 let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                
+
                 let name = class_decl.ident.sym.as_ref().to_string();
                 let methods = self.extract_class_methods(&class_decl.class, file_path, converter);
-                
+
                 result.push(FunctionOrClass::Class {
                     name,
                     line,
@@ -992,12 +1055,12 @@ impl TypeScriptParser {
                     Decl::Fn(fn_decl) => {
                         let span = fn_decl.ident.span;
                         let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                        
+
                         let name = fn_decl.ident.sym.as_ref().to_string();
                         let parameters = self.extract_function_parameters(&fn_decl.function);
                         let return_type = self.extract_return_type(&fn_decl.function);
                         let is_async = fn_decl.function.is_async;
-                        
+
                         result.push(FunctionOrClass::Function {
                             name,
                             line,
@@ -1010,10 +1073,11 @@ impl TypeScriptParser {
                     Decl::Class(class_decl) => {
                         let span = class_decl.ident.span;
                         let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                        
+
                         let name = class_decl.ident.sym.as_ref().to_string();
-                        let methods = self.extract_class_methods(&class_decl.class, file_path, converter);
-                        
+                        let methods =
+                            self.extract_class_methods(&class_decl.class, file_path, converter);
+
                         result.push(FunctionOrClass::Class {
                             name,
                             line,
@@ -1032,18 +1096,19 @@ impl TypeScriptParser {
                             if let Pat::Ident(ident) = &decl.name {
                                 let name = ident.id.sym.as_ref().to_string();
                                 let span = arrow_fn.span;
-                                let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                                
+                                let (line, column) =
+                                    converter.byte_offset_to_location(span.lo.0 as usize);
+
                                 let parameters = self.extract_arrow_function_parameters(arrow_fn);
                                 let return_type = self.extract_arrow_return_type(arrow_fn);
-                                
+
                                 result.push(FunctionOrClass::Function {
                                     name,
                                     line,
                                     column,
                                     parameters,
                                     return_type,
-                                    is_async: false,
+                                    is_async: arrow_fn.is_async,
                                 });
                             }
                         }
@@ -1055,84 +1120,69 @@ impl TypeScriptParser {
     }
 
     /// Извлекает параметры функции
-    fn extract_function_parameters(&self, function: &swc_ecma_ast::Function) -> Vec<crate::call_graph::Parameter> {
+    fn extract_function_parameters(
+        &self,
+        function: &swc_ecma_ast::Function,
+    ) -> Vec<crate::call_graph::Parameter> {
         let mut params = Vec::new();
-        
+
         for param in &function.params {
             match &param.pat {
                 Pat::Ident(ident) => {
-                    let name = ident.id.sym.as_ref().to_string();
-                    let type_info = if let Some(type_ann) = &ident.type_ann {
-                        self.ts_type_ann_to_type_info(type_ann)
-                    } else {
-                        TypeInfo {
-                            base_type: crate::models::BaseType::Unknown,
-                            schema_ref: None,
-                            constraints: Vec::new(),
-                            optional: false,
-                        }
-                    };
-                    let optional = false; // В TypeScript параметры не могут быть optional без ?
-                    
-                    params.push(crate::call_graph::Parameter {
-                        name,
-                        type_info,
-                        optional,
-                        default_value: None,
-                    });
+                    params.push(self.parameter_from_binding_ident(ident, None, false));
+                }
+                Pat::Assign(assign) => {
+                    if let Pat::Ident(ident) = assign.left.as_ref() {
+                        let default_value = Some(self.expr_to_literal(&assign.right));
+                        params.push(self.parameter_from_binding_ident(ident, default_value, true));
+                    }
                 }
                 _ => {}
             }
         }
-        
+
         params
     }
 
     /// Извлекает параметры arrow функции
-    fn extract_arrow_function_parameters(&self, arrow_fn: &swc_ecma_ast::ArrowExpr) -> Vec<crate::call_graph::Parameter> {
+    fn extract_arrow_function_parameters(
+        &self,
+        arrow_fn: &swc_ecma_ast::ArrowExpr,
+    ) -> Vec<crate::call_graph::Parameter> {
         let mut params = Vec::new();
-        
+
         for param in &arrow_fn.params {
             match param {
                 swc_ecma_ast::Pat::Ident(ident) => {
-                    let name = ident.id.sym.as_ref().to_string();
-                    let type_info = if let Some(type_ann) = &ident.type_ann {
-                        self.ts_type_ann_to_type_info(type_ann)
-                    } else {
-                        TypeInfo {
-                            base_type: crate::models::BaseType::Unknown,
-                            schema_ref: None,
-                            constraints: Vec::new(),
-                            optional: false,
-                        }
-                    };
-                    
-                    params.push(crate::call_graph::Parameter {
-                        name,
-                        type_info,
-                        optional: false,
-                        default_value: None,
-                    });
+                    params.push(self.parameter_from_binding_ident(ident, None, false));
+                }
+                swc_ecma_ast::Pat::Assign(assign) => {
+                    if let Pat::Ident(ident) = assign.left.as_ref() {
+                        let default_value = Some(self.expr_to_literal(&assign.right));
+                        params.push(self.parameter_from_binding_ident(ident, default_value, true));
+                    }
                 }
                 _ => {}
             }
         }
-        
+
         params
     }
 
     /// Извлекает тип возвращаемого значения функции
     fn extract_return_type(&self, function: &swc_ecma_ast::Function) -> Option<TypeInfo> {
-        function.return_type.as_ref().map(|type_ann| {
-            self.ts_type_ann_to_type_info(type_ann)
-        })
+        function
+            .return_type
+            .as_ref()
+            .map(|type_ann| self.ts_type_ann_to_type_info(type_ann))
     }
 
     /// Извлекает тип возвращаемого значения arrow функции
     fn extract_arrow_return_type(&self, arrow_fn: &swc_ecma_ast::ArrowExpr) -> Option<TypeInfo> {
-        arrow_fn.return_type.as_ref().map(|type_ann| {
-            self.ts_type_ann_to_type_info(type_ann)
-        })
+        arrow_fn
+            .return_type
+            .as_ref()
+            .map(|type_ann| self.ts_type_ann_to_type_info(type_ann))
     }
 
     /// Преобразует TsTypeAnn в TypeInfo
@@ -1146,6 +1196,52 @@ impl TypeScriptParser {
         }
     }
 
+    fn parameter_from_binding_ident(
+        &self,
+        ident: &BindingIdent,
+        default_value: Option<String>,
+        force_optional: bool,
+    ) -> crate::call_graph::Parameter {
+        let mut type_info = if let Some(type_ann) = &ident.type_ann {
+            self.ts_type_ann_to_type_info(type_ann)
+        } else {
+            TypeInfo {
+                base_type: crate::models::BaseType::Unknown,
+                schema_ref: None,
+                constraints: Vec::new(),
+                optional: false,
+            }
+        };
+
+        let optional = ident.optional || force_optional;
+        type_info.optional = optional;
+
+        crate::call_graph::Parameter {
+            name: ident.id.sym.as_ref().to_string(),
+            type_info,
+            optional,
+            default_value,
+        }
+    }
+
+    fn expr_to_literal(&self, expr: &swc_ecma_ast::Expr) -> String {
+        match expr {
+            swc_ecma_ast::Expr::Lit(lit) => match lit {
+                swc_ecma_ast::Lit::Str(s) => format!("{:?}", s.value),
+                swc_ecma_ast::Lit::Bool(b) => b.value.to_string(),
+                swc_ecma_ast::Lit::Num(n) => n.value.to_string(),
+                swc_ecma_ast::Lit::Null(_) => "null".to_string(),
+                swc_ecma_ast::Lit::BigInt(bi) => bi.value.to_string(),
+                swc_ecma_ast::Lit::Regex(regex) => format!("/{:?}/{:?}", regex.exp, regex.flags),
+                swc_ecma_ast::Lit::JSXText(text) => format!("{:?}", text.value),
+            },
+            swc_ecma_ast::Expr::Ident(ident) => ident.sym.as_ref().to_string(),
+            swc_ecma_ast::Expr::Array(_) => "[]".to_string(),
+            swc_ecma_ast::Expr::Object(_) => "{...}".to_string(),
+            _ => format!("{:?}", expr),
+        }
+    }
+
     /// Извлекает методы класса
     fn extract_class_methods(
         &self,
@@ -1154,24 +1250,26 @@ impl TypeScriptParser {
         converter: &LocationConverter,
     ) -> Vec<ClassMethod> {
         let mut methods = Vec::new();
-        
+
         for member in &class.body {
             match member {
                 swc_ecma_ast::ClassMember::Method(method) => {
                     let span = method.span;
                     let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
-                    
+
                     let name = match &method.key {
                         swc_ecma_ast::PropName::Ident(ident) => ident.sym.as_ref().to_string(),
-                        swc_ecma_ast::PropName::Str(str) => str.value.as_str().unwrap_or("").to_string(),
+                        swc_ecma_ast::PropName::Str(str) => {
+                            str.value.as_str().unwrap_or("").to_string()
+                        }
                         _ => "unknown".to_string(),
                     };
-                    
+
                     let parameters = self.extract_function_parameters(&method.function);
                     let return_type = self.extract_return_type(&method.function);
                     let is_async = method.function.is_async;
                     let is_static = method.is_static;
-                    
+
                     methods.push(ClassMethod {
                         name,
                         line,
@@ -1185,7 +1283,7 @@ impl TypeScriptParser {
                 _ => {}
             }
         }
-        
+
         methods
     }
 }
@@ -1242,10 +1340,10 @@ import express from 'express';
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.ts");
         std::fs::write(&test_file, source).unwrap();
-        
+
         let (module, _, converter) = parser.parse_file(&test_file).unwrap();
         let imports = parser.extract_imports(&module, test_file.to_str().unwrap(), &converter);
-        
+
         assert_eq!(imports.len(), 2);
         assert_eq!(imports[0].path, "./Component");
         assert_eq!(imports[1].path, "express");
@@ -1263,10 +1361,10 @@ function test() {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.ts");
         std::fs::write(&test_file, source).unwrap();
-        
+
         let (module, _, converter) = parser.parse_file(&test_file).unwrap();
         let calls = parser.extract_calls(&module, test_file.to_str().unwrap(), &converter);
-        
+
         assert!(calls.len() >= 2);
         assert!(calls.iter().any(|c| c.name == "doSomething"));
         assert!(calls.iter().any(|c| c.name == "anotherFunction"));
@@ -1285,10 +1383,11 @@ interface User {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.ts");
         std::fs::write(&test_file, source).unwrap();
-        
+
         let (module, _, converter) = parser.parse_file(&test_file).unwrap();
-        let schemas = parser.extract_typescript_schemas(&module, test_file.to_str().unwrap(), &converter);
-        
+        let schemas =
+            parser.extract_typescript_schemas(&module, test_file.to_str().unwrap(), &converter);
+
         assert_eq!(schemas.len(), 1);
         assert_eq!(schemas[0].name, "User");
         assert_eq!(schemas[0].schema_type, SchemaType::TypeScript);
@@ -1305,10 +1404,11 @@ type UserRole = 'admin' | 'user';
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.ts");
         std::fs::write(&test_file, source).unwrap();
-        
+
         let (module, _, converter) = parser.parse_file(&test_file).unwrap();
-        let schemas = parser.extract_typescript_schemas(&module, test_file.to_str().unwrap(), &converter);
-        
+        let schemas =
+            parser.extract_typescript_schemas(&module, test_file.to_str().unwrap(), &converter);
+
         assert_eq!(schemas.len(), 2);
         assert!(schemas.iter().any(|s| s.name == "UserId"));
         assert!(schemas.iter().any(|s| s.name == "UserRole"));
@@ -1326,10 +1426,10 @@ const userSchema = z.object({
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.ts");
         std::fs::write(&test_file, source).unwrap();
-        
+
         let (module, _, converter) = parser.parse_file(&test_file).unwrap();
         let schemas = parser.extract_zod_schemas(&module, test_file.to_str().unwrap(), &converter);
-        
+
         assert_eq!(schemas.len(), 1);
         assert_eq!(schemas[0].name, "userSchema");
         assert_eq!(schemas[0].schema_type, SchemaType::Zod);
@@ -1352,10 +1452,11 @@ class UserService {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.ts");
         std::fs::write(&test_file, source).unwrap();
-        
+
         let (module, _, converter) = parser.parse_file(&test_file).unwrap();
-        let items = parser.extract_functions_and_classes(&module, test_file.to_str().unwrap(), &converter);
-        
+        let items =
+            parser.extract_functions_and_classes(&module, test_file.to_str().unwrap(), &converter);
+
         assert!(items.len() >= 2);
         let has_function = items.iter().any(|item| {
             if let FunctionOrClass::Function { name, .. } = item {
@@ -1392,16 +1493,19 @@ const User = z.object({
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.ts");
         std::fs::write(&test_file, source).unwrap();
-        
+
         let (module, _, converter) = parser.parse_file(&test_file).unwrap();
-        let zod_schemas = parser.extract_zod_schemas(&module, test_file.to_str().unwrap(), &converter);
-        
+        let zod_schemas =
+            parser.extract_zod_schemas(&module, test_file.to_str().unwrap(), &converter);
+
         // Проверяем, что Zod схема связана с TypeScript интерфейсом (если имена совпадают)
         let user_schema = zod_schemas.iter().find(|s| s.name == "User");
         if let Some(schema) = user_schema {
             // Если есть связь, она должна быть в metadata
-            assert!(schema.metadata.contains_key("typescript_type") || 
-                    schema.metadata.contains_key("fields"));
+            assert!(
+                schema.metadata.contains_key("typescript_type")
+                    || schema.metadata.contains_key("fields")
+            );
         }
     }
 
@@ -1423,10 +1527,11 @@ type Intersection = A & B;
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.ts");
         std::fs::write(&test_file, source).unwrap();
-        
+
         let (module, _, converter) = parser.parse_file(&test_file).unwrap();
-        let schemas = parser.extract_typescript_schemas(&module, test_file.to_str().unwrap(), &converter);
-        
+        let schemas =
+            parser.extract_typescript_schemas(&module, test_file.to_str().unwrap(), &converter);
+
         assert!(schemas.len() >= 4);
         assert!(schemas.iter().any(|s| s.name == "Union"));
         assert!(schemas.iter().any(|s| s.name == "Intersection"));
@@ -1451,10 +1556,11 @@ class Inner {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.ts");
         std::fs::write(&test_file, source).unwrap();
-        
+
         let (module, _, converter) = parser.parse_file(&test_file).unwrap();
-        let items = parser.extract_functions_and_classes(&module, test_file.to_str().unwrap(), &converter);
-        
+        let items =
+            parser.extract_functions_and_classes(&module, test_file.to_str().unwrap(), &converter);
+
         let outer_class = items.iter().find(|item| {
             if let FunctionOrClass::Class { name, .. } = item {
                 name == "Outer"
@@ -1463,7 +1569,7 @@ class Inner {
             }
         });
         assert!(outer_class.is_some());
-        
+
         let inner_class = items.iter().find(|item| {
             if let FunctionOrClass::Class { name, .. } = item {
                 name == "Inner"
@@ -1472,7 +1578,7 @@ class Inner {
             }
         });
         assert!(inner_class.is_some());
-        
+
         // Check that Inner class has methods
         if let Some(FunctionOrClass::Class { methods, .. }) = inner_class {
             assert!(methods.len() >= 2);
@@ -1493,10 +1599,11 @@ type StringContainer = Container<string>;
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.ts");
         std::fs::write(&test_file, source).unwrap();
-        
+
         let (module, _, converter) = parser.parse_file(&test_file).unwrap();
-        let schemas = parser.extract_typescript_schemas(&module, test_file.to_str().unwrap(), &converter);
-        
+        let schemas =
+            parser.extract_typescript_schemas(&module, test_file.to_str().unwrap(), &converter);
+
         assert!(schemas.len() >= 2);
         assert!(schemas.iter().any(|s| s.name == "Container"));
         assert!(schemas.iter().any(|s| s.name == "StringContainer"));

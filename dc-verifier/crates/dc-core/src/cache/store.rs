@@ -1,7 +1,7 @@
 use crate::call_graph::{CallEdge, CallGraph, CallNode};
 use anyhow::Result;
-use blake3;
 use bincode;
+use blake3;
 use sled::Db;
 
 /// Хранилище кэша для графов вызовов
@@ -51,11 +51,7 @@ impl CacheStore {
         for edge_idx in graph.edge_indices() {
             if let Some((source, target)) = graph.edge_endpoints(edge_idx) {
                 if let Some(edge) = graph.edge_weight(edge_idx) {
-                    edges.push((
-                        source.index() as u32,
-                        target.index() as u32,
-                        edge.clone(),
-                    ));
+                    edges.push((source.index() as u32, target.index() as u32, edge.clone()));
                 }
             }
         }
@@ -108,16 +104,75 @@ impl CacheStore {
 
             // Добавляем рёбра
             for (source_old, target_old, edge) in graph_data.edges {
-                if let (Some(&source_new), Some(&target_new)) =
-                    (index_map.get(&source_old), index_map.get(&target_old))
-                {
-                    graph.add_edge(source_new, target_new, edge);
-                }
+                let source_new = index_map.get(&source_old).copied().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Corrupted cache: missing node {} while restoring edge ({} -> {})",
+                        source_old,
+                        source_old,
+                        target_old
+                    )
+                })?;
+                let target_new = index_map.get(&target_old).copied().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Corrupted cache: missing node {} while restoring edge ({} -> {})",
+                        target_old,
+                        source_old,
+                        target_old
+                    )
+                })?;
+
+                graph.add_edge(source_new, target_new, edge);
             }
 
             Ok(Some(graph))
         } else {
             Ok(None)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{Location, NodeId};
+    use petgraph::graph::NodeIndex;
+    use tempfile::TempDir;
+
+    #[test]
+    fn fails_when_edge_references_missing_node() {
+        let dir = TempDir::new().unwrap();
+        let store = CacheStore::new(dir.path().to_str().unwrap()).unwrap();
+        let key = "graph:test";
+
+        #[derive(serde::Serialize)]
+        struct GraphData {
+            nodes: Vec<(u32, CallNode)>,
+            edges: Vec<(u32, u32, CallEdge)>,
+        }
+
+        let edge = CallEdge::Call {
+            caller: NodeId(NodeIndex::new(0)),
+            callee: NodeId(NodeIndex::new(1)),
+            argument_mapping: Vec::new(),
+            location: Location {
+                file: "file.py".into(),
+                line: 1,
+                column: Some(0),
+            },
+        };
+
+        let data = GraphData {
+            nodes: Vec::new(), // отсутствуют узлы, но есть ребро
+            edges: vec![(0, 1, edge)],
+        };
+
+        let serialized = bincode::serialize(&data).unwrap();
+        store.db.insert(key, serialized).unwrap();
+
+        let err = store.load_graph("test").unwrap_err();
+        assert!(
+            err.to_string().contains("Corrupted cache"),
+            "unexpected error: {err}"
+        );
     }
 }
