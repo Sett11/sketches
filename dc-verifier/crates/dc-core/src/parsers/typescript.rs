@@ -6,20 +6,20 @@ use swc_common::{sync::Lrc, FileName, SourceMap};
 use swc_ecma_ast::*;
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
 
-/// Парсер TypeScript кода с анализом вызовов (через swc)
+/// TypeScript code parser with call analysis (via swc)
 pub struct TypeScriptParser {
     source_map: SourceMap,
 }
 
 impl TypeScriptParser {
-    /// Создает новый парсер
+    /// Creates a new parser
     pub fn new() -> Self {
         Self {
             source_map: SourceMap::default(),
         }
     }
 
-    /// Парсит файл через swc
+    /// Parses a file via swc
     pub fn parse_file(&self, path: &Path) -> Result<(Module, String, LocationConverter)> {
         let source = std::fs::read_to_string(path)?;
         let module = self.parse_source(&source, path)?;
@@ -27,7 +27,7 @@ impl TypeScriptParser {
         Ok((module, source, converter))
     }
 
-    /// Парсит исходный код
+    /// Parses source code
     fn parse_source(&self, source: &str, path: &Path) -> Result<Module> {
         let file_name: Lrc<FileName> = FileName::Real(path.to_path_buf()).into();
         let fm = self
@@ -48,7 +48,7 @@ impl TypeScriptParser {
             .map_err(|e| anyhow::anyhow!("Parse error: {:?}", e))
     }
 
-    /// Извлекает импорты из модуля
+    /// Extracts imports from module
     pub fn extract_imports(
         &self,
         module: &Module,
@@ -62,10 +62,10 @@ impl TypeScriptParser {
                 let span = import_decl.span;
                 let (line, column) = converter.byte_offset_to_location(span.lo.0 as usize);
 
-                // Извлекаем путь импорта из src
+                // Extract import path from src
                 let import_path = import_decl.src.value.as_str().unwrap_or("").to_string();
 
-                // Извлекаем имена из specifiers
+                // Extract names from specifiers
                 let mut names = Vec::new();
                 for specifier in &import_decl.specifiers {
                     match specifier {
@@ -107,7 +107,7 @@ impl TypeScriptParser {
         imports
     }
 
-    /// Извлекает вызовы функций из модуля
+    /// Extracts function calls from module
     pub fn extract_calls(
         &self,
         module: &Module,
@@ -124,7 +124,7 @@ impl TypeScriptParser {
         calls
     }
 
-    /// Обходит ModuleItem и извлекает вызовы
+    /// Traverses ModuleItem and extracts calls
     fn walk_module_item(
         &self,
         item: &ModuleItem,
@@ -150,7 +150,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Обходит Statement и извлекает вызовы
+    /// Traverses Statement and extracts calls
     fn walk_stmt(
         &self,
         stmt: &Stmt,
@@ -212,7 +212,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Обходит BlockStmt
+    /// Traverses BlockStmt
     fn walk_block_stmt(
         &self,
         block: &BlockStmt,
@@ -226,7 +226,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Обходит VarDeclOrExpr
+    /// Traverses VarDeclOrExpr
     fn walk_var_decl_or_expr(
         &self,
         init: &VarDeclOrExpr,
@@ -249,7 +249,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Обходит Expression и извлекает вызовы
+    /// Traverses Expression and extracts calls
     fn walk_expr(
         &self,
         expr: &Expr,
@@ -283,7 +283,7 @@ impl TypeScriptParser {
                     });
                 }
 
-                // Рекурсивно обходим аргументы
+                // Recursively traverse arguments
                 for arg in &call_expr.args {
                     self.walk_expr_or_spread(arg, context, calls, file_path, converter);
                 }
@@ -346,7 +346,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Обходит ExprOrSpread
+    /// Traverses ExprOrSpread
     fn walk_expr_or_spread(
         &self,
         arg: &ExprOrSpread,
@@ -358,7 +358,7 @@ impl TypeScriptParser {
         self.walk_expr(&arg.expr, context, calls, file_path, converter);
     }
 
-    /// Извлекает имя функции из Callee
+    /// Extracts function name from Callee
     fn call_name(&self, callee: &Callee) -> Option<String> {
         match callee {
             Callee::Expr(expr) => match expr.as_ref() {
@@ -385,7 +385,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Извлекает аргументы вызова
+    /// Extracts call arguments
     fn extract_call_arguments(&self, call_expr: &CallExpr) -> Vec<CallArgument> {
         let mut args = Vec::new();
 
@@ -400,7 +400,7 @@ impl TypeScriptParser {
         args
     }
 
-    /// Преобразует Expression в строку
+    /// Converts Expression to string
     fn expr_to_string(&self, expr: &Expr) -> String {
         match expr {
             Expr::Ident(ident) => ident.sym.as_ref().to_string(),
@@ -437,7 +437,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Извлекает Zod схемы из модуля
+    /// Extracts Zod schemas from module
     pub fn extract_zod_schemas(
         &self,
         module: &Module,
@@ -446,7 +446,7 @@ impl TypeScriptParser {
     ) -> Vec<SchemaReference> {
         let mut schemas = Vec::new();
 
-        // Сначала извлекаем TypeScript схемы для связи с Zod
+        // First extract TypeScript schemas to link with Zod
         let ts_schemas = self.extract_typescript_schemas(module, file_path, converter);
         let mut ts_schema_map = std::collections::HashMap::new();
         for ts_schema in &ts_schemas {
@@ -460,7 +460,7 @@ impl TypeScriptParser {
         schemas
     }
 
-    /// Обходит AST для поиска Zod схем
+    /// Traverses AST to find Zod schemas
     fn walk_for_zod(
         &self,
         item: &ModuleItem,
@@ -487,14 +487,14 @@ impl TypeScriptParser {
 
                                     let mut metadata = std::collections::HashMap::new();
 
-                                    // Пытаемся найти связанный TypeScript тип
+                                    // Try to find associated TypeScript type
                                     if let Some(ts_schema) = ts_schema_map.get(&schema_name) {
-                                        // Связываем Zod схему с TypeScript типом
+                                        // Link Zod schema with TypeScript type
                                         metadata.insert(
                                             "typescript_type".to_string(),
                                             ts_schema.name.clone(),
                                         );
-                                        // Копируем поля из TypeScript схемы, если они есть
+                                        // Copy fields from TypeScript schema if present
                                         if let Some(fields) = ts_schema.metadata.get("fields") {
                                             metadata.insert("fields".to_string(), fields.clone());
                                         }
@@ -544,7 +544,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Проверяет, является ли выражение вызовом Zod
+    /// Checks if expression is a Zod call
     fn is_zod_call(&self, expr: &Expr) -> bool {
         match expr {
             Expr::Member(member_expr) => {
@@ -566,7 +566,7 @@ impl TypeScriptParser {
         false
     }
 
-    /// Извлекает типы TypeScript из модуля
+    /// Extracts TypeScript types from module
     pub fn extract_types(
         &self,
         module: &Module,
@@ -582,7 +582,7 @@ impl TypeScriptParser {
         types
     }
 
-    /// Извлекает TypeScript схемы (интерфейсы и type aliases) из модуля
+    /// Extracts TypeScript schemas (interfaces and type aliases) from module
     pub fn extract_typescript_schemas(
         &self,
         module: &Module,
@@ -598,7 +598,7 @@ impl TypeScriptParser {
         schemas
     }
 
-    /// Обходит AST для поиска TypeScript типов
+    /// Traverses AST to find TypeScript types
     fn walk_for_types(
         &self,
         item: &ModuleItem,
@@ -616,7 +616,7 @@ impl TypeScriptParser {
                         let name = ts_interface.id.sym.as_ref().to_string();
                         let base_type = crate::models::BaseType::Object;
 
-                        // Извлекаем свойства интерфейса
+                        // Extract interface properties
                         let mut metadata = std::collections::HashMap::new();
                         let mut fields = Vec::new();
 
@@ -751,7 +751,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Обходит AST для поиска TypeScript схем
+    /// Traverses AST to find TypeScript schemas
     fn walk_for_typescript_schemas(
         &self,
         item: &ModuleItem,
@@ -889,12 +889,12 @@ impl TypeScriptParser {
         }
     }
 
-    /// Преобразует TypeScript type annotation в строку
+    /// Converts TypeScript type annotation to string
     fn ts_type_ann_to_string(&self, ts_type_ann: &swc_ecma_ast::TsTypeAnn) -> String {
         self.ts_type_to_string(&ts_type_ann.type_ann)
     }
 
-    /// Преобразует TypeScript тип в строку
+    /// Converts TypeScript type to string
     fn ts_type_to_string(&self, ts_type: &swc_ecma_ast::TsType) -> String {
         match ts_type {
             swc_ecma_ast::TsType::TsKeywordType(keyword) => match keyword.kind {
@@ -926,7 +926,7 @@ impl TypeScriptParser {
                 )
             }
             swc_ecma_ast::TsType::TsUnionOrIntersectionType(union) => {
-                // В SWC 18.0 структура может отличаться, используем match на тип
+                // In SWC 18.0 structure may differ, use match on type
                 match union {
                     swc_ecma_ast::TsUnionOrIntersectionType::TsUnionType(union_type) => {
                         let types: Vec<String> = union_type
@@ -952,7 +952,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Преобразует TypeScript тип в BaseType
+    /// Converts TypeScript type to BaseType
     fn ts_type_to_base_type(&self, ts_type: &swc_ecma_ast::TsType) -> crate::models::BaseType {
         match ts_type {
             swc_ecma_ast::TsType::TsKeywordType(keyword) => match keyword.kind {
@@ -970,7 +970,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Преобразует TsEntityName в строку
+    /// Converts TsEntityName to string
     fn ts_entity_name_to_string(&self, entity_name: &swc_ecma_ast::TsEntityName) -> String {
         match entity_name {
             swc_ecma_ast::TsEntityName::Ident(ident) => ident.sym.as_ref().to_string(),
@@ -984,7 +984,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Преобразует ключ свойства в строку
+    /// Converts property key to string
     fn ts_property_key_to_string(&self, key: &swc_ecma_ast::Expr) -> String {
         match key {
             Expr::Ident(ident) => ident.sym.as_ref().to_string(),
@@ -993,7 +993,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Извлекает функции и классы из модуля
+    /// Extracts functions and classes from module
     pub fn extract_functions_and_classes(
         &self,
         module: &Module,
@@ -1009,7 +1009,7 @@ impl TypeScriptParser {
         result
     }
 
-    /// Обходит AST для поиска функций и классов
+    /// Traverses AST to find functions and classes
     fn walk_for_functions_and_classes(
         &self,
         item: &ModuleItem,
@@ -1089,7 +1089,7 @@ impl TypeScriptParser {
                 }
             }
             ModuleItem::Stmt(Stmt::Decl(Decl::Var(var_decl))) => {
-                // Обрабатываем const fn = () => {} и подобные
+                // Handle const fn = () => {} and similar
                 for decl in &var_decl.decls {
                     if let Some(init) = &decl.init {
                         if let Expr::Arrow(arrow_fn) = init.as_ref() {
@@ -1119,7 +1119,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Извлекает параметры функции
+    /// Extracts function parameters
     fn extract_function_parameters(
         &self,
         function: &swc_ecma_ast::Function,
@@ -1144,7 +1144,7 @@ impl TypeScriptParser {
         params
     }
 
-    /// Извлекает параметры arrow функции
+    /// Extracts arrow function parameters
     fn extract_arrow_function_parameters(
         &self,
         arrow_fn: &swc_ecma_ast::ArrowExpr,
@@ -1169,7 +1169,7 @@ impl TypeScriptParser {
         params
     }
 
-    /// Извлекает тип возвращаемого значения функции
+    /// Extracts function return type
     fn extract_return_type(&self, function: &swc_ecma_ast::Function) -> Option<TypeInfo> {
         function
             .return_type
@@ -1177,7 +1177,7 @@ impl TypeScriptParser {
             .map(|type_ann| self.ts_type_ann_to_type_info(type_ann))
     }
 
-    /// Извлекает тип возвращаемого значения arrow функции
+    /// Extracts arrow function return type
     fn extract_arrow_return_type(&self, arrow_fn: &swc_ecma_ast::ArrowExpr) -> Option<TypeInfo> {
         arrow_fn
             .return_type
@@ -1185,7 +1185,7 @@ impl TypeScriptParser {
             .map(|type_ann| self.ts_type_ann_to_type_info(type_ann))
     }
 
-    /// Преобразует TsTypeAnn в TypeInfo
+    /// Converts TsTypeAnn to TypeInfo
     fn ts_type_ann_to_type_info(&self, type_ann: &swc_ecma_ast::TsTypeAnn) -> TypeInfo {
         let base_type = self.ts_type_to_base_type(&type_ann.type_ann);
         TypeInfo {
@@ -1242,7 +1242,7 @@ impl TypeScriptParser {
         }
     }
 
-    /// Извлекает методы класса
+    /// Extracts class methods
     fn extract_class_methods(
         &self,
         class: &swc_ecma_ast::Class,
@@ -1288,7 +1288,7 @@ impl TypeScriptParser {
     }
 }
 
-/// Функция или класс из TypeScript кода
+/// Function or class from TypeScript code
 #[derive(Debug, Clone)]
 pub enum FunctionOrClass {
     Function {
@@ -1307,7 +1307,7 @@ pub enum FunctionOrClass {
     },
 }
 
-/// Метод класса
+/// Class method
 #[derive(Debug, Clone)]
 pub struct ClassMethod {
     pub name: String,
@@ -1498,10 +1498,10 @@ const User = z.object({
         let zod_schemas =
             parser.extract_zod_schemas(&module, test_file.to_str().unwrap(), &converter);
 
-        // Проверяем, что Zod схема связана с TypeScript интерфейсом (если имена совпадают)
+        // Check that Zod schema is linked with TypeScript interface (if names match)
         let user_schema = zod_schemas.iter().find(|s| s.name == "User");
         if let Some(schema) = user_schema {
-            // Если есть связь, она должна быть в metadata
+            // If there is a link, it should be in metadata
             assert!(
                 schema.metadata.contains_key("typescript_type")
                     || schema.metadata.contains_key("fields")

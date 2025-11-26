@@ -7,7 +7,7 @@ mod reporters;
 
 #[derive(Parser)]
 #[command(name = "dc-verifier")]
-#[command(about = "Data Chains Verifier - проверка целостности цепочек данных")]
+#[command(about = "Data Chains Verifier - data chain integrity verification")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -21,24 +21,24 @@ pub enum ReportFormat {
 
 #[derive(clap::Subcommand)]
 enum Commands {
-    /// Проверка цепочек данных
+    /// Check data chains
     Check {
-        /// Путь к конфигурационному файлу
+        /// Path to configuration file
         #[arg(short, long, default_value = "dc-verifier.toml")]
         config: String,
-        /// Формат отчета (markdown или json)
+        /// Report format (markdown or json)
         #[arg(short, long, value_enum, default_value_t = ReportFormat::Markdown)]
         format: ReportFormat,
     },
-    /// Создание конфигурационного файла
+    /// Create configuration file
     Init {
-        /// Путь для создания конфига
+        /// Path for creating config
         #[arg(default_value = "dc-verifier.toml")]
         path: String,
     },
-    /// Визуализация графов (опционально)
+    /// Visualize graphs (optional)
     Visualize {
-        /// Путь к конфигурационному файлу
+        /// Path to configuration file
         #[arg(short, long, default_value = "dc-verifier.toml")]
         config: String,
     },

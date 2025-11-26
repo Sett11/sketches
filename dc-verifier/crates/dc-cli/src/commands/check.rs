@@ -50,11 +50,11 @@ pub fn execute_check(config_path: &str, format: ReportFormat) -> Result<()> {
                 }
                 let graph = builder.build_graph()?;
 
-                // Создаем DataFlowTracker и ChainBuilder
+                // Create DataFlowTracker and ChainBuilder
                 let tracker = DataFlowTracker::new(&graph);
                 let chain_builder = ChainBuilder::new(&graph, &tracker);
 
-                // Находим все цепочки
+                // Find all chains
                 let chains = chain_builder.find_all_chains()?;
                 all_chains.extend(chains);
             }

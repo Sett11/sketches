@@ -2,27 +2,27 @@ use crate::data_flow::Variable;
 use crate::models::NodeId;
 use serde::{Deserialize, Serialize};
 
-/// Ошибки, связанные с DataPath
+/// Errors related to DataPath
 #[derive(Debug, Clone)]
 pub enum DataPathError {
-    /// Попытка установить пустой список узлов
+    /// Attempt to set an empty list of nodes
     EmptyNodes,
-    /// Попытка установить путь короче двух узлов
+    /// Attempt to set a path shorter than two nodes
     InsufficientNodes,
 }
 
-/// Путь данных через граф вызовов
+/// Data path through the call graph
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataPath {
-    /// Последовательность узлов в пути
+    /// Sequence of nodes in the path
     nodes: Vec<NodeId>,
-    /// Переменная, которая передается по пути
+    /// Variable that is passed along the path
     variable: Variable,
 }
 
 impl DataPath {
-    /// Создает новый путь данных
-    /// Требует непустой список узлов (минимум from и to)
+    /// Creates a new data path
+    /// Requires a non-empty list of nodes (minimum from and to)
     pub fn new(from: NodeId, to: NodeId, variable: Variable) -> Self {
         Self {
             nodes: vec![from, to],
@@ -30,38 +30,39 @@ impl DataPath {
         }
     }
 
-    /// Возвращает начальный узел (источник данных)
+    /// Returns the starting node (data source)
     pub fn from(&self) -> Option<&NodeId> {
         self.nodes.first()
     }
 
-    /// Возвращает конечный узел (приемник данных)
+    /// Returns the ending node (data sink)
     pub fn to(&self) -> Option<&NodeId> {
         self.nodes.last()
     }
 
-    /// Возвращает последовательность узлов
+    /// Returns the sequence of nodes
     pub fn nodes(&self) -> &[NodeId] {
         &self.nodes
     }
 
-    /// Возвращает переменную
+    /// Returns the variable
     pub fn variable(&self) -> &Variable {
         &self.variable
     }
 
-    /// Добавляет промежуточный узел в путь
+    /// Adds an intermediate node to the path
     pub fn push_node(&mut self, node: NodeId) {
         if !self.nodes.contains(&node) {
             self.nodes.push(node);
         }
     }
 
-    /// Устанавливает последовательность узлов с сохранением консистентности
+    /// Sets the sequence of nodes while maintaining consistency
     ///
-    /// # Ошибки
+    /// # Errors
     ///
-    /// Возвращает `Err(DataPathError::InsufficientNodes)`, если передано меньше двух узлов.
+    /// - Returns `Err(DataPathError::EmptyNodes)` if an empty list of nodes is passed.
+    /// - Returns `Err(DataPathError::InsufficientNodes)` if a list with one node is passed (minimum two nodes required).
     pub fn set_nodes(&mut self, nodes: Vec<NodeId>) -> Result<(), DataPathError> {
         if nodes.is_empty() {
             return Err(DataPathError::EmptyNodes);

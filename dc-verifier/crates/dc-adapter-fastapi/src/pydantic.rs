@@ -7,7 +7,7 @@ use rustpython_parser::{parse, Mode};
 use std::fs;
 use std::path::Path;
 
-/// Извлекатель Pydantic моделей
+/// Extractor for Pydantic models
 pub struct PydanticExtractor;
 
 impl PydanticExtractor {
@@ -18,47 +18,73 @@ impl PydanticExtractor {
         json_dumps.call1((schema,)).ok()?.extract::<String>().ok()
     }
 
-    /// Создает новый экстрактор
+    /// Creates a new extractor
     pub fn new() -> Self {
         Self
     }
 
-    /// Извлекает Pydantic модель из параметра функции
+    /// Extracts a Pydantic model from a function parameter
     pub fn extract_from_parameter(&self, param: &Bound<'_, PyAny>) -> Option<SchemaReference> {
         let py = param.py();
-        // Параметр может быть:
-        // 1. Классом Pydantic модели (тип аннотации)
-        // 2. Экземпляром Pydantic модели
+        // Parameter can be:
+        // 1. A Pydantic model class (type annotation)
+        // 2. An instance of a Pydantic model
 
-        // Импортируем BaseModel для проверки
+        // Import BaseModel for checking
         let pydantic = py.import("pydantic").ok()?;
         let base_model = pydantic.getattr("BaseModel").ok()?;
 
-        // Проверяем, является ли параметр классом, наследующимся от BaseModel
-        let is_base_model = match param.is_instance(base_model.as_ref()) {
-            Ok(true) => true,
-            Ok(false) => param.hasattr("model_json_schema").unwrap_or(false),
-            Err(_) => false,
+        // Check if param is a Pydantic BaseModel:
+        // 1. It could be an instance of BaseModel (checked via is_instance)
+        // 2. It could be a class that inherits from BaseModel (checked via issubclass)
+        let is_base_model = if param.is_instance(base_model.as_ref()).unwrap_or(false) {
+            // It's an instance of BaseModel
+            true
+        } else {
+            // Check if it's a class that inherits from BaseModel
+            // First check if it has model_json_schema or model_fields (Pydantic model attributes)
+            let has_model_attrs = param.hasattr("model_json_schema").unwrap_or(false)
+                || param.hasattr("model_fields").unwrap_or(false);
+            
+            if has_model_attrs {
+                // It has Pydantic attributes, likely a class
+                true
+            } else {
+                // Try to check via issubclass if it's a class
+                let inspect = py.import("inspect").ok()?;
+                let isclass = inspect.getattr("isclass").ok()?;
+                let is_class: bool = isclass.call1((param,)).ok()?.extract().unwrap_or(false);
+                
+                if is_class {
+                    // It's a class, check if it's a subclass of BaseModel
+                    let builtins = py.import("builtins").ok()?;
+                    let issubclass_fn = builtins.getattr("issubclass").ok()?;
+                    let base_model_ref: &pyo3::Bound<'_, pyo3::PyAny> = base_model.as_ref();
+                    issubclass_fn.call1((param, base_model_ref)).ok()?.extract().unwrap_or(false)
+                } else {
+                    false
+                }
+            }
         };
 
         if !is_base_model {
             return None;
         }
 
-        // Извлекаем имя модели
+        // Extract model name
         let name = param
             .getattr("__name__")
             .and_then(|n| n.extract::<String>())
             .unwrap_or_else(|_| "Unknown".to_string());
 
-        // Извлекаем JSON схему
+        // Extract JSON schema
         let json_schema_str = Self::serialize_schema(py, param).unwrap_or_else(|| "{}".to_string());
 
-        // Извлекаем поля модели
+        // Extract model fields
         let mut metadata = std::collections::HashMap::new();
         metadata.insert("json_schema".to_string(), json_schema_str);
 
-        // Пытаемся получить model_fields
+        // Try to get model_fields
         if let Ok(model_fields) = param.getattr("model_fields") {
             if let Ok(fields_dict) = model_fields.cast::<pyo3::types::PyDict>() {
                 let mut fields = Vec::new();
@@ -84,7 +110,7 @@ impl PydanticExtractor {
             name,
             schema_type: SchemaType::Pydantic,
             location: Location {
-                file: String::new(), // Файл будет установлен позже
+                file: String::new(), // File will be set later
                 line: 0,
                 column: None,
             },
@@ -92,24 +118,24 @@ impl PydanticExtractor {
         })
     }
 
-    /// Извлекает все Pydantic модели из файла
+    /// Extracts all Pydantic models from a file
     pub fn extract_from_file(&self, path: &Path) -> Result<Vec<SchemaReference>> {
-        // Читаем файл
+        // Read file
         let source = fs::read_to_string(path)?;
 
-        // Парсим AST
+        // Parse AST
         let ast = parse(&source, Mode::Module, path.to_string_lossy().as_ref())?;
 
-        // Создаем LocationConverter для точной конвертации байтовых смещений
+        // Create LocationConverter for accurate byte offset conversion
         let converter = LocationConverter::new(source);
 
-        // Используем PythonParser для извлечения моделей
+        // Use PythonParser to extract models
         let parser = PythonParser::new();
         let file_path = path.to_string_lossy().to_string();
         Ok(parser.extract_pydantic_models(&ast, &file_path, &converter))
     }
 
-    /// Преобразует Pydantic модель в SchemaReference
+    /// Converts a Pydantic model to SchemaReference
     pub fn model_to_schema(
         &self,
         model: &Bound<'_, PyAny>,

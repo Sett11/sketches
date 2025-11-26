@@ -4,26 +4,26 @@ use swc_common::{sync::Lrc, FileName, SourceMap};
 use swc_ecma_ast::*;
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
 
-/// Парсер TypeScript через swc
+/// TypeScript parser via swc
 pub struct SwcParser {
     source_map: SourceMap,
 }
 
 impl SwcParser {
-    /// Создает новый парсер
+    /// Creates a new parser
     pub fn new() -> Self {
         Self {
             source_map: SourceMap::default(),
         }
     }
 
-    /// Парсит файл TypeScript/JavaScript
+    /// Parses a TypeScript/JavaScript file
     pub fn parse_file(&self, path: &Path) -> Result<Module> {
         let source = std::fs::read_to_string(path)?;
         self.parse_source(&source, path)
     }
 
-    /// Парсит исходный код
+    /// Parses source code
     pub fn parse_source(&self, source: &str, path: &Path) -> Result<Module> {
         let file_name: Lrc<FileName> = FileName::Real(path.to_path_buf()).into();
         let fm = self

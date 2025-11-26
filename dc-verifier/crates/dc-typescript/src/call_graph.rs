@@ -42,26 +42,26 @@ impl TypeScriptCallGraphBuilder {
         self
     }
 
-    /// Строит граф для TypeScript проекта
+    /// Builds graph for TypeScript project
     pub fn build_graph(mut self) -> Result<CallGraph> {
-        // 1. Находим все .ts/.tsx файлы в src_paths
+        // 1. Find all .ts/.tsx files in src_paths
         let mut files = Vec::new();
         for src_path in &self.src_paths {
             self.find_ts_files(src_path, &mut files)?;
         }
 
-        // 2. Определяем корень проекта
+        // 2. Determine project root
         if let Some(first_file) = files.first() {
             if let Some(parent) = first_file.parent() {
                 self.project_root = Some(parent.to_path_buf());
             }
         }
 
-        // 3. Для каждого файла парсим и обрабатываем
+        // 3. Parse and process each file
         for file in files {
             if let Err(err) = self.process_file(&file) {
-                eprintln!("Ошибка при обработке файла {:?}: {}", file, err);
-                // Продолжаем обработку других файлов
+                eprintln!("Error processing file {:?}: {}", file, err);
+                // Continue processing other files
             }
         }
 
@@ -93,39 +93,39 @@ impl TypeScriptCallGraphBuilder {
                 .parse_file(&normalized)
                 .with_context(|| format!("Failed to parse {:?}", normalized))?;
 
-            // Создаем узел модуля
+            // Create module node
             let module_node = self.get_or_create_module_node(&normalized)?;
             self.processed_files.insert(normalized.clone());
 
             let file_path_str = normalized.to_string_lossy().to_string();
 
-            // Извлекаем импорты
+            // Extract imports
             let imports = self
                 .parser
                 .extract_imports(&module, &file_path_str, &converter);
             for import in imports {
                 if let Err(err) = self.process_import(module_node, &import, &normalized) {
                     eprintln!(
-                        "Ошибка при обработке импорта '{}' из {:?}: {}",
+                        "Error processing import '{}' from {:?}: {}",
                         import.path, normalized, err
                     );
                 }
             }
 
-            // Извлекаем вызовы
+            // Extract calls
             let calls = self
                 .parser
                 .extract_calls(&module, &file_path_str, &converter);
             for call in calls {
                 if let Err(err) = self.process_call(module_node, &call, &normalized) {
                     eprintln!(
-                        "Ошибка при обработке вызова '{}' из {:?}: {}",
+                        "Error processing call '{}' from {:?}: {}",
                         call.name, normalized, err
                     );
                 }
             }
 
-            // Извлекаем функции и классы
+            // Extract functions and classes
             let functions_and_classes =
                 self.parser
                     .extract_functions_and_classes(&module, &file_path_str, &converter);
@@ -221,7 +221,7 @@ impl TypeScriptCallGraphBuilder {
         result
     }
 
-    /// Обрабатывает импорт
+    /// Processes an import
     fn process_import(
         &mut self,
         from: NodeId,
@@ -263,18 +263,18 @@ impl TypeScriptCallGraphBuilder {
         Ok(module_node)
     }
 
-    /// Обрабатывает вызов функции
+    /// Processes a function call
     fn process_call(
         &mut self,
         caller: NodeId,
         call: &dc_core::parsers::Call,
         current_file: &Path,
     ) -> Result<NodeId> {
-        // Пытаемся найти функцию в текущем файле или других обработанных файлах
+        // Try to find function in current file or other processed files
         let callee_node = self
             .find_function_node(&call.name, current_file)
             .unwrap_or_else(|| {
-                // Если функция не найдена, создаем виртуальный узел
+                // If function not found, create virtual node
                 self.get_or_create_function_node(&call.name, current_file)
             });
 
@@ -305,7 +305,7 @@ impl TypeScriptCallGraphBuilder {
         Ok(callee_node)
     }
 
-    /// Получает или создает узел модуля
+    /// Gets or creates a module node
     fn get_or_create_module_node(&mut self, path: &PathBuf) -> Result<NodeId> {
         let normalized = Self::normalize_path(path);
 
@@ -320,12 +320,12 @@ impl TypeScriptCallGraphBuilder {
         Ok(node)
     }
 
-    /// Получает или создает узел функции
+    /// Gets or creates a function node
     fn get_or_create_function_node(&mut self, name: &str, file: &Path) -> NodeId {
         self.get_or_create_function_node_with_details(name, file, 0, Vec::new(), None, false)
     }
 
-    /// Получает или создает узел функции с деталями
+    /// Gets or creates a function node with details
     fn get_or_create_function_node_with_details(
         &mut self,
         name: &str,
@@ -352,7 +352,7 @@ impl TypeScriptCallGraphBuilder {
         node
     }
 
-    /// Получает или создает узел класса
+    /// Gets or creates a class node
     fn get_or_create_class_node(&mut self, name: &str, file: &Path, _line: usize) -> NodeId {
         let _key = format!(
             "{}::class::{}",
@@ -360,7 +360,7 @@ impl TypeScriptCallGraphBuilder {
             name
         );
 
-        // Проверяем, есть ли уже узел класса
+        // Check if class node already exists
         for (node_idx, node) in self.graph.node_indices().zip(self.graph.node_weights()) {
             if let CallNode::Class {
                 name: node_name, ..
@@ -380,7 +380,7 @@ impl TypeScriptCallGraphBuilder {
         node
     }
 
-    /// Получает или создает узел метода
+    /// Gets or creates a method node
     fn get_or_create_method_node(
         &mut self,
         name: &str,
@@ -398,7 +398,7 @@ impl TypeScriptCallGraphBuilder {
             name
         );
 
-        // Проверяем, есть ли уже узел метода
+        // Check if method node already exists
         for (node_idx, node) in self.graph.node_indices().zip(self.graph.node_weights()) {
             if let CallNode::Method {
                 name: node_name,
@@ -419,7 +419,7 @@ impl TypeScriptCallGraphBuilder {
             return_type,
         }));
 
-        // Обновляем список методов класса
+        // Update class methods list
         if let Some(class_node) = self.graph.node_weight_mut(*class) {
             if let CallNode::Class { methods, .. } = class_node {
                 methods.push(node);
@@ -429,7 +429,7 @@ impl TypeScriptCallGraphBuilder {
         node
     }
 
-    /// Находит узел функции
+    /// Finds a function node
     fn find_function_node(&self, name: &str, current_file: &Path) -> Option<NodeId> {
         let normalized = Self::normalize_path(current_file);
         let direct_key = Self::function_key(&normalized, name);
@@ -437,14 +437,14 @@ impl TypeScriptCallGraphBuilder {
             return Some(*node);
         }
 
-        // Ищем по имени во всех файлах
+        // Search by name across all files
         self.function_nodes
             .iter()
             .find(|(key, _)| key.ends_with(&format!("::{}", name)))
             .map(|(_, node)| *node)
     }
 
-    /// Разрешает путь импорта
+    /// Resolves import path
     fn resolve_import_path(&self, import_path: &str, current_file: &Path) -> Result<PathBuf> {
         let normalized_current = Self::normalize_path(current_file);
         let base_dir = normalized_current
@@ -456,7 +456,7 @@ impl TypeScriptCallGraphBuilder {
         let candidate = if import_path.starts_with('.') {
             self.resolve_relative_import(import_path, &base_dir)
         } else {
-            // Абсолютные импорты - пока пропускаем внешние модули
+            // Absolute imports - skip external modules for now
             return Err(anyhow::anyhow!("External module: {}", import_path));
         };
 
@@ -464,7 +464,7 @@ impl TypeScriptCallGraphBuilder {
             return Ok(candidate);
         }
 
-        // Пробуем добавить расширения
+        // Try adding extensions
         for ext in &["ts", "tsx", "js", "jsx"] {
             let mut with_ext = candidate.clone();
             with_ext.set_extension(ext);
@@ -480,7 +480,7 @@ impl TypeScriptCallGraphBuilder {
         )
     }
 
-    /// Разрешает относительный импорт
+    /// Resolves relative import
     fn resolve_relative_import(&self, import_path: &str, base_dir: &Path) -> PathBuf {
         let mut level = 0;
         for ch in import_path.chars() {
@@ -507,12 +507,12 @@ impl TypeScriptCallGraphBuilder {
         path
     }
 
-    /// Нормализует путь
+    /// Normalizes path
     fn normalize_path(path: &Path) -> PathBuf {
         path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
     }
 
-    /// Создает ключ для функции
+    /// Creates key for function
     fn function_key(path: &Path, name: &str) -> String {
         format!("{}::{}", Self::normalize_path(path).to_string_lossy(), name)
     }

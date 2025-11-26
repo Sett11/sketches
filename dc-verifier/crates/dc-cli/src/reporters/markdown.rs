@@ -3,22 +3,22 @@ use dc_core::models::DataChain;
 use std::fs;
 use std::path::Path;
 
-/// Генератор Markdown отчетов
+/// Markdown report generator
 pub struct MarkdownReporter;
 
 impl MarkdownReporter {
-    /// Генерирует отчет в формате .chain_verification_report.md
+    /// Generates report in .chain_verification_report.md format
     pub fn generate(&self, chains: &[DataChain], output_path: &str) -> Result<()> {
         let mut report = String::new();
 
-        // Заголовок
-        report.push_str("# Отчет о проверке всех цепочек данных приложения\n\n");
+        // Header
+        report.push_str("# Data Chain Verification Report\n\n");
         report.push_str(&format!(
-            "## Дата проверки\n{}\n\n",
+            "## Verification Date\n{}\n\n",
             chrono::Utc::now().format("%Y-%m-%d")
         ));
 
-        // Статистика - считаем цепочки, а не контракты
+        // Statistics - count chains, not contracts
         let total_chains = chains.len();
         let chains_with_critical = chains
             .iter()
@@ -32,7 +32,7 @@ impl MarkdownReporter {
         let chains_with_warnings = chains
             .iter()
             .filter(|chain| {
-                // Цепочки без Critical, но с хотя бы одним Warning
+                // Chains without Critical, but with at least one Warning
                 !chain
                     .contracts
                     .iter()
@@ -45,23 +45,23 @@ impl MarkdownReporter {
             .count();
         let valid_chains = total_chains - chains_with_critical - chains_with_warnings;
 
-        report.push_str("## Статистика проверки\n");
-        report.push_str(&format!("- **Всего цепочек**: {}\n", total_chains));
+        report.push_str("## Verification Statistics\n");
+        report.push_str(&format!("- **Total Chains**: {}\n", total_chains));
         report.push_str(&format!(
-            "- **Критические проблемы**: {}\n",
+            "- **Critical Issues**: {}\n",
             chains_with_critical
         ));
-        report.push_str(&format!("- **Предупреждения**: {}\n", chains_with_warnings));
-        report.push_str(&format!("- **Корректные цепочки**: {}\n\n", valid_chains));
+        report.push_str(&format!("- **Warnings**: {}\n", chains_with_warnings));
+        report.push_str(&format!("- **Valid Chains**: {}\n\n", valid_chains));
         report.push_str("---\n\n");
 
-        // Детали по цепочкам
+        // Chain details
         for (idx, chain) in chains.iter().enumerate() {
-            report.push_str(&format!("### Цепочка {}: {}\n\n", idx + 1, chain.name));
+            report.push_str(&format!("### Chain {}: {}\n\n", idx + 1, chain.name));
             report.push_str(&format!("#### ID: {}\n\n", chain.id));
 
-            // Путь данных
-            report.push_str("#### Путь данных:\n```\n");
+            // Data path
+            report.push_str("#### Data Path:\n```\n");
             for (idx, link) in chain.links.iter().enumerate() {
                 if idx > 0 {
                     report.push_str(" → ");
@@ -70,8 +70,8 @@ impl MarkdownReporter {
             }
             report.push_str("\n```\n\n");
 
-            // Проверенные стыки
-            report.push_str("#### Проверенные стыки:\n\n");
+            // Checked junctions
+            report.push_str("#### Checked Junctions:\n\n");
             for (i, contract) in chain.contracts.iter().enumerate() {
                 if contract.mismatches.is_empty() {
                     report.push_str(&format!(
@@ -98,7 +98,7 @@ impl MarkdownReporter {
                 }
             }
 
-            // Результат
+            // Result
             let has_errors = chain.contracts.iter().any(|c| !c.mismatches.is_empty());
             if has_errors {
                 report.push_str("#### Результат: ⚠️ **ТРЕБУЕТ ВНИМАНИЯ**\n\n");
@@ -109,7 +109,7 @@ impl MarkdownReporter {
             report.push_str("---\n\n");
         }
 
-        // Итоговые выводы
+        // Final conclusions
         report.push_str("## Итоговые выводы\n\n");
         if chains_with_critical == 0 && chains_with_warnings == 0 {
             report.push_str("### ✅ Общая оценка: **КОРРЕКТНО**\n\n");

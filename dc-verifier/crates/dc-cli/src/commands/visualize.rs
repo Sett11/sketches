@@ -39,7 +39,8 @@ pub fn execute_visualize(config_path: &str) -> Result<()> {
 
                 let builder = FastApiCallGraphBuilder::new(app_path);
                 let graph = builder.build_graph()?;
-                all_graphs.push(("fastapi".to_string(), graph));
+                let unique_id = format!("{}_{}", adapter_config.adapter_type, idx);
+                all_graphs.push((unique_id, graph));
             }
             "typescript" => {
                 let src_paths = adapter_config
@@ -50,7 +51,8 @@ pub fn execute_visualize(config_path: &str) -> Result<()> {
 
                 let builder = TypeScriptCallGraphBuilder::new(src_paths);
                 let graph = builder.build_graph()?;
-                all_graphs.push(("typescript".to_string(), graph));
+                let unique_id = format!("{}_{}", adapter_config.adapter_type, idx);
+                all_graphs.push((unique_id, graph));
             }
             _ => {
                 eprintln!("Unknown adapter type: {}", adapter_config.adapter_type);
@@ -76,7 +78,7 @@ pub fn execute_visualize(config_path: &str) -> Result<()> {
         pb.set_message(format!("Generating DOT for {}...", adapter_name));
         let dot_content = generate_dot(&graph, &adapter_name)?;
 
-        // Определяем путь для сохранения
+        // Determine output path
         let output_path = if config.output.path.ends_with(".dot") {
             let base_path = PathBuf::from(&config.output.path);
             if adapter_count > 1 {
@@ -98,7 +100,7 @@ pub fn execute_visualize(config_path: &str) -> Result<()> {
             PathBuf::from(&config.output.path).join(format!("{}.dot", adapter_name))
         };
 
-        // Создаем директорию, если нужно
+        // Create directory if needed
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -115,20 +117,20 @@ pub fn execute_visualize(config_path: &str) -> Result<()> {
     Ok(())
 }
 
-/// Генерирует DOT формат из графа
+/// Generates DOT format from graph
 fn generate_dot(graph: &CallGraph, graph_name: &str) -> Result<String> {
     let mut dot = String::new();
 
-    // Заголовок DOT
+    // DOT header
     dot.push_str(&format!("digraph {} {{\n", graph_name.replace("-", "_")));
     dot.push_str("  rankdir=LR;\n");
     dot.push_str("  node [shape=box];\n\n");
 
-    // Создаем маппинг индексов узлов на строковые идентификаторы
+    // Create mapping of node indices to string identifiers
     let mut node_map = std::collections::HashMap::new();
     let mut node_counter = 0;
 
-    // Добавляем узлы
+    // Add nodes
     for node_idx in graph.node_indices() {
         if let Some(node) = graph.node_weight(node_idx) {
             let node_id = format!("node_{}", node_counter);
@@ -136,7 +138,7 @@ fn generate_dot(graph: &CallGraph, graph_name: &str) -> Result<String> {
             node_counter += 1;
 
             let label = format_node_label(node);
-            // Экранируем специальные символы для DOT
+            // Escape special characters for DOT
             let escaped_label = escape_dot_string(&label);
             dot.push_str(&format!("  {} [label=\"{}\"];\n", node_id, escaped_label));
         }
@@ -144,7 +146,7 @@ fn generate_dot(graph: &CallGraph, graph_name: &str) -> Result<String> {
 
     dot.push_str("\n");
 
-    // Добавляем рёбра
+    // Add edges
     for edge_idx in graph.edge_indices() {
         if let Some((source, target)) = graph.edge_endpoints(edge_idx) {
             if let (Some(source_id), Some(target_id), Some(edge)) = (
@@ -166,7 +168,7 @@ fn generate_dot(graph: &CallGraph, graph_name: &str) -> Result<String> {
     Ok(dot)
 }
 
-/// Форматирует метку узла для DOT
+/// Formats node label for DOT
 fn format_node_label(node: &CallNode) -> String {
     match node {
         CallNode::Module { path } => {
@@ -199,7 +201,7 @@ fn format_node_label(node: &CallNode) -> String {
     }
 }
 
-/// Форматирует метку ребра для DOT
+/// Formats edge label for DOT
 fn format_edge_label(edge: &CallEdge) -> String {
     match edge {
         CallEdge::Import { import_path, .. } => {
@@ -220,7 +222,7 @@ fn format_edge_label(edge: &CallEdge) -> String {
     }
 }
 
-/// Экранирует специальные символы для DOT
+/// Escapes special characters for DOT
 fn escape_dot_string(s: &str) -> String {
     s.replace("\\", "\\\\")
         .replace("\"", "\\\"")

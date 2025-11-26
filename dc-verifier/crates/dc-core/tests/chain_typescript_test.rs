@@ -8,7 +8,7 @@ use std::path::PathBuf;
 fn test_chain_with_typescript_function() {
     let mut graph = CallGraph::new();
 
-    // Создаем функцию с TypeScript схемой
+    // Create function with TypeScript schema
     let function_node = graph.add_node(CallNode::Function {
         name: "processUser".to_string(),
         file: PathBuf::from("service.ts"),
@@ -67,7 +67,7 @@ fn test_chain_with_typescript_function() {
     let tracker = DataFlowTracker::new(&graph);
     let _builder = ChainBuilder::new(&graph, &tracker);
 
-    // Проверяем, что функция содержит TypeScript схему в параметрах
+    // Check that function contains TypeScript schema in parameters
     let function_node_data = graph.node_weight(function_node).unwrap();
     if let CallNode::Function { parameters, .. } = function_node_data {
         assert_eq!(parameters.len(), 1);
@@ -136,7 +136,7 @@ fn test_contract_checker_with_typescript_schemas() {
     let checker = ContractChecker::new();
     let mismatches = checker.check_contract(&contract);
 
-    // Проверяем, что контракт проверен (может быть с mismatches или без)
+    // These schemas are expected to be compatible, so no mismatches should be present
     assert_eq!(contract.from_schema.name, "UserRequest");
     assert_eq!(contract.to_schema.name, "User");
     assert!(
@@ -175,7 +175,7 @@ fn test_schema_parser_typescript() {
     assert!(json_schema.properties.contains_key("name"));
     assert!(json_schema.properties.contains_key("age"));
     assert!(json_schema.properties.contains_key("email"));
-    assert_eq!(json_schema.required.len(), 2); // name и age
+    assert_eq!(json_schema.required.len(), 2); // name and age
     assert!(json_schema.required.contains(&"name".to_string()));
     assert!(json_schema.required.contains(&"age".to_string()));
 }

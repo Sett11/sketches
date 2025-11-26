@@ -1,28 +1,28 @@
 use dc_core::models::{Location, SchemaReference, SchemaType};
 use swc_ecma_ast::{CallExpr, Callee, Expr, MemberProp};
 
-/// Извлекатель Zod схем из TypeScript кода
+/// Zod schema extractor from TypeScript code
 pub struct ZodExtractor;
 
 impl ZodExtractor {
-    /// Создает новый экстрактор
+    /// Creates a new extractor
     pub fn new() -> Self {
         Self
     }
 
-    /// Извлекает Zod схему из AST узла
+    /// Extracts Zod schema from AST node
     pub fn extract_schema(
         &self,
         node: &Expr,
         file_path: &str,
         line: usize,
     ) -> Option<SchemaReference> {
-        // Ищем вызовы z.object(), z.string(), и т.д.
+        // Look for calls like z.object(), z.string(), etc.
         if let Expr::Call(call_expr) = node {
             if let Callee::Expr(callee_expr) = &call_expr.callee {
-                // Проверяем, является ли это вызовом z.object() или подобным
+                // Check if this is a call to z.object() or similar
                 if self.is_zod_call(callee_expr) {
-                    // Извлекаем имя схемы из контекста или создаем дефолтное
+                    // Extract schema name from context or create default
                     let schema_name = self.extract_schema_name(call_expr, None);
 
                     return Some(SchemaReference {
@@ -41,7 +41,7 @@ impl ZodExtractor {
         None
     }
 
-    /// Извлекает Zod схему из AST узла с контекстом (для использования из TypeScriptParser)
+    /// Extracts Zod schema from AST node with context (for use from TypeScriptParser)
     pub fn extract_schema_with_context(
         &self,
         call_expr: &CallExpr,
@@ -68,13 +68,13 @@ impl ZodExtractor {
         None
     }
 
-    /// Проверяет, является ли выражение вызовом Zod (z.object, z.string и т.д.)
+    /// Checks if expression is a Zod call (z.object, z.string, etc.)
     fn is_zod_call(&self, expr: &Expr) -> bool {
         match expr {
             Expr::Member(member_expr) => {
                 if let Expr::Ident(ident) = member_expr.obj.as_ref() {
                     if ident.sym.as_ref() == "z" {
-                        // Проверяем методы Zod
+                        // Check Zod methods
                         if let MemberProp::Ident(prop) = &member_expr.prop {
                             let method = prop.sym.as_ref();
                             return method == "object"
@@ -91,19 +91,19 @@ impl ZodExtractor {
         false
     }
 
-    /// Извлекает имя схемы из вызова
+    /// Extracts schema name from call
     fn extract_schema_name(&self, _call_expr: &CallExpr, var_name: Option<&str>) -> String {
-        // Используем имя переменной, если оно передано
+        // Use variable name if provided
         if let Some(name) = var_name {
             return name.to_string();
         }
 
-        // Пытаемся найти имя переменной из контекста
-        // Пока возвращаем дефолтное имя, если контекст недоступен
+        // Try to find variable name from context
+        // For now, return default name if context unavailable
         "ZodSchema".to_string()
     }
 
-    /// Преобразует Zod схему в SchemaReference
+    /// Converts Zod schema to SchemaReference
     pub fn zod_to_schema(&self, zod_schema: &str, location: Location) -> SchemaReference {
         SchemaReference {
             name: zod_schema.to_string(),
