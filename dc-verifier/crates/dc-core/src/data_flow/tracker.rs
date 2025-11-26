@@ -33,8 +33,8 @@ impl<'a> DataFlowTracker<'a> {
         let mut paths = Vec::new();
 
         // Находим все узлы, которые могут получить эту переменную
-        let visited = &mut std::collections::HashSet::new();
-        self.track_variable_recursive(var, from, &mut paths, visited);
+        let mut visited = std::collections::HashSet::new();
+        self.track_variable_recursive(var, from, &mut paths, &mut visited);
 
         paths
     }
@@ -72,7 +72,7 @@ impl<'a> DataFlowTracker<'a> {
     /// Отслеживает параметр функции через вызовы
     pub fn track_parameter(&self, param_name: &str, func: NodeId) -> Vec<DataPath> {
         let mut paths = Vec::new();
-        let visited = &mut std::collections::HashSet::new();
+        let mut visited = std::collections::HashSet::new();
 
         // Создаем переменную для параметра
         let param_var = Self::create_param_variable(param_name);
@@ -96,7 +96,7 @@ impl<'a> DataFlowTracker<'a> {
                                 param_name,
                                 func,
                                 &mut paths,
-                                visited,
+                                &mut visited,
                             );
                         }
                     }

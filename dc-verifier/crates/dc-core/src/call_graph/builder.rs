@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use rustpython_parser::{ast, parse, Mode};
+use rustpython_parser::ast::Ranged;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,31 +10,41 @@ use crate::call_graph::decorator::Decorator;
 use crate::models::{BaseType, NodeId, TypeInfo};
 use crate::parsers::{Call, Import, LocationConverter, PythonParser};
 
-/// Построитель графа вызовов - главный класс для создания графа из кода
+/// Call graph builder - main class for creating call graphs from code
 pub struct CallGraphBuilder {
-    /// Граф вызовов
+    /// Call graph
     graph: CallGraph,
-    /// Точки входа в приложение
+    /// Entry points in the application
     entry_points: Vec<PathBuf>,
-    /// Обработанные файлы (для избежания циклов)
+    /// Processed files (to avoid cycles)
     processed_files: HashSet<PathBuf>,
-    /// Парсер исходников
+    /// Source code parser
     parser: PythonParser,
-    /// Кэш узлов-модулей
+    /// Cache of module nodes
     module_nodes: HashMap<PathBuf, NodeId>,
-    /// Кэш функций/методов (ключ: файл + имя)
+    /// Cache of functions/methods (key: file + name)
     function_nodes: HashMap<String, NodeId>,
-    /// Корень проекта
+    /// Project root
     project_root: Option<PathBuf>,
+    /// Maximum recursion depth (None = unlimited)
+    max_depth: Option<usize>,
+    /// Current recursion depth
+    current_depth: usize,
 }
 
 impl CallGraphBuilder {
-    /// Создает новый построитель графа
+    /// Creates a new call graph builder
+    ///
+    /// # Example
+    /// ```
+    /// use dc_core::call_graph::CallGraphBuilder;
+    /// let builder = CallGraphBuilder::new();
+    /// ```
     pub fn new() -> Self {
         Self::with_parser(PythonParser::new())
     }
 
-    /// Создает построитель графа с кастомным парсером (для тестов)
+    /// Creates a call graph builder with a custom parser (for tests)
     pub fn with_parser(parser: PythonParser) -> Self {
         Self {
             graph: CallGraph::new(),
@@ -43,10 +54,18 @@ impl CallGraphBuilder {
             module_nodes: HashMap::new(),
             function_nodes: HashMap::new(),
             project_root: None,
+            max_depth: None,
+            current_depth: 0,
         }
     }
 
-    /// Находит точку входа (main.py, app.py) в проекте
+    /// Sets the maximum recursion depth
+    pub fn with_max_depth(mut self, max_depth: Option<usize>) -> Self {
+        self.max_depth = max_depth;
+        self
+    }
+
+    /// Finds the entry point (main.py, app.py) in the project
     pub fn find_entry_point(&self, project_root: &Path) -> Result<PathBuf> {
         let candidates = ["main.py", "app.py", "__main__.py"];
 
@@ -60,13 +79,24 @@ impl CallGraphBuilder {
         anyhow::bail!("Entry point not found in {:?}", project_root)
     }
 
-    /// Строит граф от точки входа
+    /// Builds the graph from an entry point
     pub fn build_from_entry(&mut self, entry: &Path) -> Result<()> {
         let normalized_entry = Self::normalize_path(entry);
 
         if self.processed_files.contains(&normalized_entry) {
-            return Ok(()); // Уже обработан
+            return Ok(()); // Already processed
         }
+
+        // Check recursion depth limit
+        if let Some(max_depth) = self.max_depth {
+            if self.current_depth >= max_depth {
+                return Err(anyhow::Error::from(
+                    crate::error::GraphError::MaxDepthExceeded(max_depth)
+                ));
+            }
+        }
+
+        self.current_depth += 1;
 
         if self.project_root.is_none() {
             if let Some(parent) = normalized_entry.parent() {
@@ -83,7 +113,7 @@ impl CallGraphBuilder {
         )
         .with_context(|| format!("Failed to parse {:?}", normalized_entry))?;
 
-        // Создаем LocationConverter для точной конвертации байтовых смещений
+        // Create LocationConverter for accurate byte offset conversion
         let converter = LocationConverter::new(source);
 
         let module_node = self.get_or_create_module_node(&normalized_entry)?;
@@ -92,14 +122,15 @@ impl CallGraphBuilder {
         self.entry_points.push(normalized_entry.clone());
 
         self.process_imports(&ast, module_node, &normalized_entry, &converter)?;
-        self.extract_functions_and_classes(&ast, &normalized_entry)?;
+        self.extract_functions_and_classes(&ast, &normalized_entry, &converter)?;
         self.process_calls(&ast, module_node, &normalized_entry)?;
         self.process_decorators(&ast, &normalized_entry, &converter)?;
 
+        self.current_depth -= 1;
         Ok(())
     }
 
-    /// Обрабатывает импорт: добавляет узел и ребро
+    /// Processes an import: adds a node and an edge
     pub fn process_import(
         &mut self,
         from: NodeId,
@@ -110,7 +141,7 @@ impl CallGraphBuilder {
             Ok(path) => path,
             Err(err) => {
                 eprintln!(
-                    "Не удалось разрешить импорт '{}' из {:?}: {}",
+                    "Failed to resolve import '{}' from {:?}: {}",
                     import.path, current_file, err
                 );
                 return Ok(from);
@@ -129,13 +160,13 @@ impl CallGraphBuilder {
             },
         );
 
-        // Рекурсивно строим граф для импортированного модуля
+        // Recursively build graph for the imported module
         let _ = self.build_from_entry(&import_path);
 
         Ok(module_node)
     }
 
-    /// Обрабатывает вызов функции: добавляет ребро
+    /// Processes a function call: adds an edge
     pub fn process_call(
         &mut self,
         caller: NodeId,
@@ -143,7 +174,7 @@ impl CallGraphBuilder {
         current_file: &Path,
     ) -> Result<NodeId> {
         let Some(callee_node) = self.find_function_node(&call.name, current_file) else {
-            // TODO: добавить логгирование после интеграции с tracing
+            // Function not found, return caller without creating edge
             return Ok(caller);
         };
 
@@ -181,7 +212,7 @@ impl CallGraphBuilder {
         Ok(callee_node)
     }
 
-    /// Обрабатывает декоратор FastAPI (@app.post)
+    /// Processes a FastAPI decorator (@app.post)
     pub fn process_decorator(&mut self, decorator: &Decorator, current_file: &Path) -> Result<()> {
         if !self.is_route_decorator(&decorator.name) {
             return Ok(());
@@ -231,17 +262,17 @@ impl CallGraphBuilder {
         Ok(())
     }
 
-    /// Получает построенный граф
+    /// Gets the built graph
     pub fn into_graph(self) -> CallGraph {
         self.graph
     }
 
-    /// Получает ссылку на граф
+    /// Gets a reference to the graph
     pub fn graph(&self) -> &CallGraph {
         &self.graph
     }
 
-    /// Получает мутабельную ссылку на граф
+    /// Gets a mutable reference to the graph
     pub fn graph_mut(&mut self) -> &mut CallGraph {
         &mut self.graph
     }
@@ -266,7 +297,7 @@ impl CallGraphBuilder {
         for import in imports {
             if let Err(err) = self.process_import(module_node, &import, file_path) {
                 eprintln!(
-                    "Не удалось обработать импорт {} в {:?}: {}",
+                    "Failed to process import {} in {:?}: {}",
                     import.path, file_path, err
                 );
             }
@@ -278,10 +309,11 @@ impl CallGraphBuilder {
         &mut self,
         module_ast: &ast::Mod,
         file_path: &Path,
+        converter: &LocationConverter,
     ) -> Result<()> {
         if let ast::Mod::Module(module) = module_ast {
             for stmt in &module.body {
-                self.handle_definition(stmt, file_path, None)?;
+                self.handle_definition(stmt, file_path, None, converter)?;
             }
         }
         Ok(())
@@ -292,12 +324,13 @@ impl CallGraphBuilder {
         stmt: &ast::Stmt,
         file_path: &Path,
         class_context: Option<(String, NodeId)>,
+        converter: &LocationConverter,
     ) -> Result<()> {
         match stmt {
             ast::Stmt::FunctionDef(func_def) => {
                 if let Some((class_name, class_node)) = class_context {
                     let method_id =
-                        self.add_method_node(&class_name, class_node, func_def, file_path)?;
+                        self.add_method_node(&class_name, class_node, func_def, file_path, converter)?;
                     if let Some(CallNode::Class { methods, .. }) =
                         self.graph.node_weight_mut(*class_node)
                     {
@@ -306,13 +339,13 @@ impl CallGraphBuilder {
                         }
                     }
                 } else {
-                    self.add_function_node(func_def, file_path)?;
+                    self.add_function_node(func_def, file_path, converter)?;
                 }
             }
             ast::Stmt::AsyncFunctionDef(func_def) => {
                 if let Some((class_name, class_node)) = class_context {
                     let method_id =
-                        self.add_async_method_node(&class_name, class_node, func_def, file_path)?;
+                        self.add_async_method_node(&class_name, class_node, func_def, file_path, converter)?;
                     if let Some(CallNode::Class { methods, .. }) =
                         self.graph.node_weight_mut(*class_node)
                     {
@@ -321,17 +354,18 @@ impl CallGraphBuilder {
                         }
                     }
                 } else {
-                    self.add_async_function_node(func_def, file_path)?;
+                    self.add_async_function_node(func_def, file_path, converter)?;
                 }
             }
             ast::Stmt::ClassDef(class_def) => {
-                let class_node = self.add_class_node(class_def, file_path)?;
+                let class_node = self.add_class_node(class_def, file_path, converter)?;
                 let class_name = class_def.name.to_string();
                 for body_stmt in &class_def.body {
                     self.handle_definition(
                         body_stmt,
                         file_path,
                         Some((class_name.clone(), class_node)),
+                        converter,
                     )?;
                 }
             }
@@ -344,13 +378,18 @@ impl CallGraphBuilder {
         &mut self,
         func_def: &ast::StmtFunctionDef,
         file_path: &Path,
+        converter: &LocationConverter,
     ) -> Result<NodeId> {
         let parameters = self.convert_parameters(&func_def.args);
+
+        // Get location from AST
+        let range = func_def.range();
+        let (line, _column) = converter.byte_offset_to_location(range.start().into());
 
         let node_id = NodeId::from(self.graph.add_node(CallNode::Function {
             name: func_def.name.to_string(),
             file: file_path.to_path_buf(),
-            line: 0, // TODO: получить location из stmt
+            line,
             parameters,
             return_type: None,
         }));
@@ -365,13 +404,18 @@ impl CallGraphBuilder {
         &mut self,
         func_def: &ast::StmtAsyncFunctionDef,
         file_path: &Path,
+        converter: &LocationConverter,
     ) -> Result<NodeId> {
         let parameters = self.convert_parameters(&func_def.args);
+
+        // Get location from AST
+        let range = func_def.range();
+        let (line, _column) = converter.byte_offset_to_location(range.start().into());
 
         let node_id = NodeId::from(self.graph.add_node(CallNode::Function {
             name: func_def.name.to_string(),
             file: file_path.to_path_buf(),
-            line: 0, // TODO: получить location из stmt
+            line,
             parameters,
             return_type: None,
         }));
@@ -388,13 +432,14 @@ impl CallGraphBuilder {
         class_node: NodeId,
         func_def: &ast::StmtFunctionDef,
         file_path: &Path,
+        _converter: &LocationConverter,
     ) -> Result<NodeId> {
         let mut parameters = self.convert_parameters(&func_def.args);
-        // Проверяем декораторы перед удалением первого параметра
+        // Check decorators before removing the first parameter
         let has_staticmethod = self.has_decorator(&func_def.decorator_list, "staticmethod");
         if !has_staticmethod && !parameters.is_empty() {
-            // Если нет @staticmethod, удаляем первый параметр (self или cls)
-            // Для @classmethod можно удалить cls, для обычных методов - self
+            // If there's no @staticmethod, remove the first parameter (self or cls)
+            // For @classmethod we can remove cls, for regular methods - self
             parameters.remove(0);
         }
 
@@ -417,6 +462,7 @@ impl CallGraphBuilder {
         class_node: NodeId,
         func_def: &ast::StmtAsyncFunctionDef,
         file_path: &Path,
+        _converter: &LocationConverter,
     ) -> Result<NodeId> {
         let mut parameters = self.convert_parameters(&func_def.args);
         // Проверяем декораторы перед удалением первого параметра
@@ -443,6 +489,7 @@ impl CallGraphBuilder {
         &mut self,
         class_def: &ast::StmtClassDef,
         file_path: &Path,
+        _converter: &LocationConverter,
     ) -> Result<NodeId> {
         let node_id = NodeId::from(self.graph.add_node(CallNode::Class {
             name: class_def.name.to_string(),
@@ -474,7 +521,7 @@ impl CallGraphBuilder {
             if let Some(caller) = caller_node {
                 if let Err(err) = self.process_call(caller, &call, file_path) {
                     eprintln!(
-                        "Не удалось обработать вызов {} в {:?}: {}",
+                        "Failed to process call {} in {:?}: {}",
                         call.name, file_path, err
                     );
                 }
@@ -489,7 +536,7 @@ impl CallGraphBuilder {
         for decorator in decorators {
             if let Err(err) = self.process_decorator(&decorator, file_path) {
                 eprintln!(
-                    "Не удалось обработать декоратор {} в {:?}: {}",
+                    "Failed to process decorator {} in {:?}: {}",
                     decorator.name, file_path, err
                 );
             }
@@ -500,40 +547,40 @@ impl CallGraphBuilder {
     fn convert_parameters(&self, args: &ast::Arguments) -> Vec<Parameter> {
         let mut params = Vec::new();
         
-        // posonlyargs, args, kwonlyargs - это Vec<ArgWithDefault>
-        // default уже хранится внутри каждого ArgWithDefault
+        // posonlyargs, args, kwonlyargs are Vec<ArgWithDefault>
+        // default is already stored inside each ArgWithDefault
         
-        // Обрабатываем posonlyargs
+        // Process posonlyargs
         for arg in &args.posonlyargs {
             params.push(self.create_parameter_from_arg_with_default(arg));
         }
         
-        // Обрабатываем args
+        // Process args
         for arg in &args.args {
             params.push(self.create_parameter_from_arg_with_default(arg));
         }
         
-        // Обрабатываем kwonlyargs
+        // Process kwonlyargs
         for arg in &args.kwonlyargs {
             params.push(self.create_parameter_from_arg_with_default(arg));
         }
         
         if let Some(arg) = &args.vararg {
-            // vararg это Option<Box<Arg>>, без default
+            // vararg is Option<Box<Arg>>, without default
             params.push(self.create_parameter_from_arg(arg, None));
         }
         if let Some(arg) = &args.kwarg {
-            // kwarg это Option<Box<Arg>>, без default
+            // kwarg is Option<Box<Arg>>, without default
             params.push(self.create_parameter_from_arg(arg, None));
         }
         params
     }
 
-    /// Создает параметр из ArgWithDefault (с default)
+    /// Creates a parameter from ArgWithDefault (with default)
     fn create_parameter_from_arg_with_default(&self, arg: &ast::ArgWithDefault) -> Parameter {
         let optional = arg.default.is_some();
         let default_value = arg.default.as_deref().map(|expr| {
-            // Извлекаем текстовое представление выражения по умолчанию
+            // Extract text representation of the default expression
             match expr {
                 ast::Expr::Constant(constant) => match &constant.value {
                     ast::Constant::Str(s) => format!("\"{}\"", s),
@@ -560,12 +607,12 @@ impl CallGraphBuilder {
         }
     }
 
-    /// Создает параметр из Arg (без default)
-    /// Принимает &Box<Arg>
+    /// Creates a parameter from Arg (without default)
+    /// Takes &Box<Arg>
     fn create_parameter_from_arg(&self, arg: &Box<ast::Arg>, default: Option<&ast::Expr>) -> Parameter {
         let optional = default.is_some();
         let default_value = default.map(|expr| {
-            // Извлекаем текстовое представление выражения по умолчанию
+            // Extract text representation of the default expression
             match expr {
                 ast::Expr::Constant(constant) => match &constant.value {
                     ast::Constant::Str(s) => format!("\"{}\"", s),
@@ -617,7 +664,7 @@ impl CallGraphBuilder {
             return Some(*node);
         }
 
-        // Находим все совпадения по ends_with("::name")
+        // Find all matches by ends_with("::name")
         let matches: Vec<_> = self
             .function_nodes
             .iter()
@@ -632,8 +679,8 @@ impl CallGraphBuilder {
             return Some(*matches[0].1);
         }
 
-        // Дизамбигуация: находим лучшее совпадение
-        // 1. Предпочитаем точное совпадение пути модуля
+        // Disambiguation: find the best match
+        // 1. Prefer exact module path match
         let current_dir = normalized.parent().map(|p| p.to_path_buf());
         if let Some(dir) = current_dir {
             if let Some((_, node)) = matches.iter().find(|(key, _)| {
@@ -647,7 +694,7 @@ impl CallGraphBuilder {
             }
         }
 
-        // 2. Предпочитаем совпадения с самым длинным общим префиксом
+        // 2. Prefer matches with the longest common prefix
         let best_match = matches
             .iter()
             .max_by_key(|(key, _)| {
@@ -659,7 +706,7 @@ impl CallGraphBuilder {
             });
 
         if let Some((_, node)) = best_match {
-            // Логируем предупреждение о неоднозначности
+            // Log warning about ambiguity
             eprintln!(
                 "Warning: Ambiguous function name '{}' found {} matches, selected one",
                 name,
@@ -668,20 +715,22 @@ impl CallGraphBuilder {
             return Some(**node);
         }
 
-        // 3. Fallback: выбираем первый детерминистически
+        // 3. Fallback: select first deterministically
         Some(*matches[0].1)
     }
 
-    /// Извлекает путь из ключа функции (формат "path::name")
+    /// Extracts path from function key (format "path::name")
     fn extract_path_from_key(key: &str) -> Option<PathBuf> {
         if let Some(pos) = key.rfind("::") {
-            PathBuf::from(&key[..pos]).canonicalize().ok()
+            let path = PathBuf::from(&key[..pos]);
+            // Try to canonicalize, but return non-canonicalized path on error
+            path.canonicalize().ok().or(Some(path))
         } else {
             None
         }
     }
 
-    /// Вычисляет длину общего префикса двух путей
+    /// Calculates the length of the common prefix of two paths
     fn common_prefix_length(path1: &Path, path2: &Path) -> usize {
         let components1: Vec<_> = path1.components().collect();
         let components2: Vec<_> = path2.components().collect();

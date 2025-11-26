@@ -7,6 +7,9 @@ pub fn execute_init(path: &str) -> Result<()> {
     let config_content = r#"project_name = "MyApp"
 entry_point = "backend/api/main.py"
 
+# Maximum recursion depth for graph building (optional, None = unlimited)
+# max_recursion_depth = 100
+
 [[adapters]]
 type = "fastapi"
 app_path = "backend/api/main.py"

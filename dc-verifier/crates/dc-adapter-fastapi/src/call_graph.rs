@@ -1,4 +1,3 @@
-use crate::extractor::FastApiExtractor;
 use anyhow::Result;
 use dc_core::call_graph::{CallGraph, CallGraphBuilder};
 use std::path::{Path, PathBuf};
@@ -10,12 +9,18 @@ pub struct FastApiCallGraphBuilder {
 }
 
 impl FastApiCallGraphBuilder {
-    /// Создает новый построитель
+    /// Creates a new builder
     pub fn new(app_path: PathBuf) -> Self {
         Self {
             core_builder: CallGraphBuilder::new(),
             app_path,
         }
+    }
+
+    /// Sets the maximum recursion depth
+    pub fn with_max_depth(mut self, max_depth: Option<usize>) -> Self {
+        self.core_builder = self.core_builder.with_max_depth(max_depth);
+        self
     }
 
     /// Строит граф для FastAPI приложения

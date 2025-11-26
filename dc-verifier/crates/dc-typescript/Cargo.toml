@@ -13,3 +13,6 @@ swc_common = "17.0"
 serde.workspace = true
 anyhow.workspace = true
 
+[dev-dependencies]
+tempfile = "3.8"
+

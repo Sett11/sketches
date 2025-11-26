@@ -24,28 +24,25 @@ impl LocationConverter {
         }
 
         // Бинарный поиск строки, содержащей offset
-        let line_idx = match self.line_starts.binary_search(&offset) {
-            Ok(idx) => idx, // Точное совпадение - начало строки
+        let (line, line_start_pos) = match self.line_starts.binary_search(&offset) {
+            Ok(idx) => {
+                // Точное совпадение - начало строки idx+1 (1-based)
+                (idx + 1, self.line_starts[idx])
+            }
             Err(idx) => {
-                // idx указывает на первую строку, которая начинается после offset
-                if idx == 0 {
-                    1 // offset до первой строки
+                // idx указывает на позицию вставки
+                // offset находится в строке idx (1-based)
+                let line_num = idx.max(1);
+                let line_start = if idx == 0 {
+                    0
                 } else {
-                    idx // offset находится в строке idx-1
-                }
+                    self.line_starts[idx - 1]
+                };
+                (line_num, line_start)
             }
         };
 
-        let line = line_idx.max(1);
-        let line_start = if line_idx == 0 {
-            0
-        } else if line_idx <= self.line_starts.len() {
-            self.line_starts[line_idx - 1]
-        } else {
-            *self.line_starts.last().unwrap_or(&0)
-        };
-
-        let column = offset.saturating_sub(line_start) + 1;
+        let column = offset.saturating_sub(line_start_pos) + 1;
         (line, column)
     }
 

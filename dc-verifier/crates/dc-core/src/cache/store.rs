@@ -1,6 +1,7 @@
-use crate::call_graph::CallGraph;
+use crate::call_graph::{CallEdge, CallGraph, CallNode};
 use anyhow::Result;
 use blake3;
+use bincode;
 use sled::Db;
 
 /// Хранилище кэша для графов вызовов
@@ -35,26 +36,88 @@ impl CacheStore {
     }
 
     /// Сохраняет граф вызовов
-    /// 
-    /// Примечание: Реализация сериализации требует дополнительных зависимостей
-    /// (serde с поддержкой petgraph или bincode). Пока возвращаем ошибку.
-    pub fn save_graph(&self, _graph_id: &str, _graph: &CallGraph) -> Result<()> {
-        // TODO: Реализовать сериализацию CallGraph
-        // Для этого потребуется:
-        // 1. Добавить зависимость bincode или настроить serde для petgraph::Graph
-        // 2. Сериализовать граф: let serialized = bincode::serialize(graph)?;
-        // 3. Сохранить: self.db.insert(key, serialized)?;
-        anyhow::bail!("save_graph not implemented: requires serialization support for petgraph::Graph")
+    pub fn save_graph(&self, graph_id: &str, graph: &CallGraph) -> Result<()> {
+        // Сериализуем граф вручную, так как petgraph::Graph не сериализуем напрямую
+        // 1. Собираем все узлы
+        let mut nodes: Vec<(u32, CallNode)> = Vec::new();
+        for node_idx in graph.node_indices() {
+            if let Some(node) = graph.node_weight(node_idx) {
+                nodes.push((node_idx.index() as u32, node.clone()));
+            }
+        }
+
+        // 2. Собираем все рёбра
+        let mut edges: Vec<(u32, u32, CallEdge)> = Vec::new();
+        for edge_idx in graph.edge_indices() {
+            if let Some((source, target)) = graph.edge_endpoints(edge_idx) {
+                if let Some(edge) = graph.edge_weight(edge_idx) {
+                    edges.push((
+                        source.index() as u32,
+                        target.index() as u32,
+                        edge.clone(),
+                    ));
+                }
+            }
+        }
+
+        // 3. Создаем структуру для сериализации
+        #[derive(serde::Serialize)]
+        struct GraphData {
+            nodes: Vec<(u32, CallNode)>,
+            edges: Vec<(u32, u32, CallEdge)>,
+        }
+
+        let graph_data = GraphData { nodes, edges };
+
+        // 4. Сериализуем через bincode
+        let serialized = bincode::serialize(&graph_data)?;
+
+        // 5. Сохраняем в sled
+        let key = format!("graph:{}", graph_id);
+        self.db.insert(key, serialized)?;
+
+        Ok(())
     }
 
     /// Загружает граф вызовов
-    pub fn load_graph(&self, _graph_id: &str) -> Result<Option<CallGraph>> {
-        // TODO: Загрузить и десериализовать граф
-        // if let Some(data) = self.db.get(key)? {
-        //     Ok(Some(deserialize_graph(data.as_ref())?))
-        // } else {
-        //     Ok(None)
-        // }
-        Ok(None)
+    pub fn load_graph(&self, graph_id: &str) -> Result<Option<CallGraph>> {
+        let key = format!("graph:{}", graph_id);
+
+        if let Some(data) = self.db.get(&key)? {
+            // Десериализуем структуру
+            #[derive(serde::Deserialize)]
+            struct GraphData {
+                nodes: Vec<(u32, CallNode)>,
+                edges: Vec<(u32, u32, CallEdge)>,
+            }
+
+            let graph_data: GraphData = bincode::deserialize(data.as_ref())?;
+
+            // Восстанавливаем граф
+            let mut graph = CallGraph::new();
+
+            // Создаем маппинг старых индексов на новые
+            let mut index_map: std::collections::HashMap<u32, petgraph::graph::NodeIndex> =
+                std::collections::HashMap::new();
+
+            // Добавляем узлы
+            for (old_idx, node) in graph_data.nodes {
+                let new_idx = graph.add_node(node);
+                index_map.insert(old_idx, new_idx);
+            }
+
+            // Добавляем рёбра
+            for (source_old, target_old, edge) in graph_data.edges {
+                if let (Some(&source_new), Some(&target_new)) =
+                    (index_map.get(&source_old), index_map.get(&target_old))
+                {
+                    graph.add_edge(source_new, target_new, edge);
+                }
+            }
+
+            Ok(Some(graph))
+        } else {
+            Ok(None)
+        }
     }
 }

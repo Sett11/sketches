@@ -16,9 +16,9 @@ impl PythonParser {
         Self
     }
 
-    /// Парсит файл и извлекает узлы вызовов
+    /// Parses a file and extracts call nodes
+    /// Note: This method is not currently used directly. CallGraphBuilder works directly with AST.
     pub fn parse_file(&self, _path: &Path) -> Result<Vec<CallNode>> {
-        // TODO: Извлечение CallNode из AST
         Ok(Vec::new())
     }
 
@@ -126,14 +126,10 @@ impl PythonParser {
                         let mut fields = Vec::new();
                         for body_stmt in &class_def.body {
                             if let ast::Stmt::AnnAssign(ann_assign) = body_stmt {
-                                if let Some(target) = &ann_assign.target {
-                                    if let ast::Expr::Name(name) = target.as_ref() {
-                                        let field_name = name.id.to_string();
-                                        let field_type = ann_assign.annotation.as_deref()
-                                            .map(|expr| self.expr_to_string(expr))
-                                            .unwrap_or_else(|| "Any".to_string());
-                                        fields.push(format!("{}:{}", field_name, field_type));
-                                    }
+                                if let ast::Expr::Name(name) = ann_assign.target.as_ref() {
+                                    let field_name = name.id.to_string();
+                                    let field_type = self.expr_to_string(ann_assign.annotation.as_ref());
+                                    fields.push(format!("{}:{}", field_name, field_type));
                                 }
                             }
                         }
@@ -301,7 +297,7 @@ impl PythonParser {
                     let arguments = self.extract_call_arguments(call_expr);
                     let location = Location {
                         file: file_path.to_string(),
-                        line: 0, // TODO: получить location из expr
+                        line: 0, // Line number extraction from expr not yet implemented
                         column: None,
                     };
                     let caller = if context.is_empty() {

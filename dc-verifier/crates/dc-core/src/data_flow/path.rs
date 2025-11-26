@@ -2,6 +2,13 @@ use crate::data_flow::Variable;
 use crate::models::NodeId;
 use serde::{Deserialize, Serialize};
 
+/// Ошибки, связанные с DataPath
+#[derive(Debug, Clone)]
+pub enum DataPathError {
+    /// Попытка установить пустой список узлов
+    EmptyNodes,
+}
+
 /// Путь данных через граф вызовов
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataPath {
@@ -49,9 +56,16 @@ impl DataPath {
     }
 
     /// Устанавливает последовательность узлов с сохранением консистентности
-    pub fn set_nodes(&mut self, nodes: Vec<NodeId>) {
-        if !nodes.is_empty() {
-            self.nodes = nodes;
+    /// 
+    /// # Ошибки
+    /// 
+    /// Возвращает `Err(DataPathError::EmptyNodes)`, если передан пустой список узлов.
+    /// Путь данных должен содержать хотя бы один узел.
+    pub fn set_nodes(&mut self, nodes: Vec<NodeId>) -> Result<(), DataPathError> {
+        if nodes.is_empty() {
+            return Err(DataPathError::EmptyNodes);
         }
+        self.nodes = nodes;
+        Ok(())
     }
 }

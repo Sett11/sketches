@@ -1,50 +1,461 @@
-use crate::swc_parser::SwcParser;
-use anyhow::Result;
-use dc_core::call_graph::{CallGraph, CallGraphBuilder};
-use std::path::PathBuf;
+use anyhow::{Context, Result};
+use dc_core::call_graph::{CallEdge, CallGraph, CallNode};
+use dc_core::models::NodeId;
+use dc_core::parsers::TypeScriptParser;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
-/// Построитель графа вызовов для TypeScript проекта
+/// TypeScript call graph builder
 pub struct TypeScriptCallGraphBuilder {
-    core_builder: CallGraphBuilder,
+    graph: CallGraph,
     src_paths: Vec<PathBuf>,
-    parser: SwcParser,
+    parser: TypeScriptParser,
+    processed_files: HashSet<PathBuf>,
+    module_nodes: HashMap<PathBuf, NodeId>,
+    function_nodes: HashMap<String, NodeId>,
+    project_root: Option<PathBuf>,
+    /// Maximum recursion depth (None = unlimited)
+    max_depth: Option<usize>,
+    /// Current recursion depth
+    current_depth: usize,
 }
 
 impl TypeScriptCallGraphBuilder {
-    /// Создает новый построитель
+    /// Creates a new builder
     pub fn new(src_paths: Vec<PathBuf>) -> Self {
         Self {
-            core_builder: CallGraphBuilder::new(),
+            graph: CallGraph::new(),
             src_paths,
-            parser: SwcParser::new(),
+            parser: TypeScriptParser::new(),
+            processed_files: HashSet::new(),
+            module_nodes: HashMap::new(),
+            function_nodes: HashMap::new(),
+            project_root: None,
+            max_depth: None,
+            current_depth: 0,
         }
     }
 
+    /// Sets the maximum recursion depth
+    pub fn with_max_depth(mut self, max_depth: Option<usize>) -> Self {
+        self.max_depth = max_depth;
+        self
+    }
+
     /// Строит граф для TypeScript проекта
-    pub fn build_graph(&mut self) -> Result<CallGraph> {
+    pub fn build_graph(mut self) -> Result<CallGraph> {
         // 1. Находим все .ts/.tsx файлы в src_paths
         let mut files = Vec::new();
         for src_path in &self.src_paths {
             self.find_ts_files(src_path, &mut files)?;
         }
 
-        // 2. Для каждого файла парсим и обрабатываем
-        // TODO: Полная реализация будет на Этапе 5 (извлечение схем)
-        // Пока создаем минимальный граф с модулями
-        for file in files {
-            // Парсим через swc
-            let _module = self.parser.parse_file(&file)?;
-
-            // TODO: Реализовать полное построение графа:
-            // - Извлечение импортов
-            // - Извлечение вызовов функций
-            // - Извлечение Zod схем
-            // - Построение графа: components → services → API calls
-            // - Связывание через axios/fetch вызовы
+        // 2. Определяем корень проекта
+        if let Some(first_file) = files.first() {
+            if let Some(parent) = first_file.parent() {
+                self.project_root = Some(parent.to_path_buf());
+            }
         }
 
-        // Возвращаем граф (пока может быть пустым, если TypeScriptParser не реализован)
-        Ok(self.core_builder.into_graph())
+        // 3. Для каждого файла парсим и обрабатываем
+        for file in files {
+            if let Err(err) = self.process_file(&file) {
+                eprintln!("Ошибка при обработке файла {:?}: {}", file, err);
+                // Продолжаем обработку других файлов
+            }
+        }
+
+        Ok(self.graph)
+    }
+
+    /// Processes a single TypeScript file
+    fn process_file(&mut self, file: &Path) -> Result<()> {
+        let normalized = Self::normalize_path(file);
+
+        if self.processed_files.contains(&normalized) {
+            return Ok(()); // Already processed
+        }
+
+        // Check recursion depth limit
+        if let Some(max_depth) = self.max_depth {
+            if self.current_depth >= max_depth {
+                return Err(anyhow::Error::from(
+                    dc_core::error::GraphError::MaxDepthExceeded(max_depth)
+                ));
+            }
+        }
+
+        self.current_depth += 1;
+
+        // Parse file
+        let (module, _source, converter) = self.parser.parse_file(&normalized)
+            .with_context(|| format!("Failed to parse {:?}", normalized))?;
+
+        // Создаем узел модуля
+        let module_node = self.get_or_create_module_node(&normalized)?;
+        self.processed_files.insert(normalized.clone());
+
+        let file_path_str = normalized.to_string_lossy().to_string();
+
+        // Извлекаем импорты
+        let imports = self.parser.extract_imports(&module, &file_path_str, &converter);
+        for import in imports {
+            if let Err(err) = self.process_import(module_node, &import, &normalized) {
+                eprintln!("Ошибка при обработке импорта '{}' из {:?}: {}", import.path, normalized, err);
+            }
+        }
+
+        // Извлекаем вызовы
+        let calls = self.parser.extract_calls(&module, &file_path_str, &converter);
+        for call in calls {
+            if let Err(err) = self.process_call(module_node, &call, &normalized) {
+                eprintln!("Ошибка при обработке вызова '{}' из {:?}: {}", call.name, normalized, err);
+            }
+        }
+
+        // Извлекаем функции и классы
+        let functions_and_classes = self.parser.extract_functions_and_classes(&module, &file_path_str, &converter);
+        for item in functions_and_classes {
+            match item {
+                dc_core::parsers::FunctionOrClass::Function { name, line, parameters, return_type, is_async, .. } => {
+                    let function_node = self.get_or_create_function_node_with_details(&name, &normalized, line, parameters, return_type, is_async);
+                    // Связываем функцию с модулем
+                    self.graph.add_edge(
+                        *module_node,
+                        *function_node,
+                        CallEdge::Call {
+                            caller: module_node,
+                            callee: function_node,
+                            argument_mapping: Vec::new(),
+                            location: dc_core::models::Location {
+                                file: file_path_str.clone(),
+                                line,
+                                column: None,
+                            },
+                        },
+                    );
+                }
+                dc_core::parsers::FunctionOrClass::Class { name, line, methods, .. } => {
+                    let class_node = self.get_or_create_class_node(&name, &normalized, line);
+                    // Связываем класс с модулем
+                    self.graph.add_edge(
+                        *module_node,
+                        *class_node,
+                        CallEdge::Call {
+                            caller: module_node,
+                            callee: class_node,
+                            argument_mapping: Vec::new(),
+                            location: dc_core::models::Location {
+                                file: file_path_str.clone(),
+                                line,
+                                column: None,
+                            },
+                        },
+                    );
+                    
+                    // Обрабатываем методы класса
+                    for method in methods {
+                        let method_node = self.get_or_create_method_node(&method.name, class_node, &normalized, method.line, method.parameters, method.return_type, method.is_async, method.is_static);
+                        // Связываем метод с классом
+                        self.graph.add_edge(
+                            *class_node,
+                            *method_node,
+                            CallEdge::Call {
+                                caller: class_node,
+                                callee: method_node,
+                                argument_mapping: Vec::new(),
+                                location: dc_core::models::Location {
+                                    file: file_path_str.clone(),
+                                    line: method.line,
+                                    column: None,
+                                },
+                            },
+                        );
+                    }
+                }
+            }
+        }
+
+        self.current_depth -= 1;
+        Ok(())
+    }
+
+    /// Обрабатывает импорт
+    fn process_import(
+        &mut self,
+        from: NodeId,
+        import: &dc_core::parsers::Import,
+        current_file: &Path,
+    ) -> Result<NodeId> {
+        let import_path = match self.resolve_import_path(&import.path, current_file) {
+            Ok(path) => path,
+            Err(err) => {
+                // Пропускаем внешние модули (node_modules)
+                if import.path.starts_with('.') || !import.path.contains('/') {
+                    return Err(err);
+                }
+                // Для внешних модулей создаем виртуальный узел
+                return Ok(from);
+            }
+        };
+
+        let module_node = self.get_or_create_module_node(&import_path)?;
+
+        self.graph.add_edge(
+            *from,
+            *module_node,
+            CallEdge::Import {
+                from,
+                to: module_node,
+                import_path: import.path.clone(),
+                file: import_path.clone(),
+            },
+        );
+
+        // Recursively process the imported module
+        // Note: current_depth is managed inside process_file
+        if !self.processed_files.contains(&import_path) {
+            let _ = self.process_file(&import_path);
+        }
+
+        Ok(module_node)
+    }
+
+    /// Обрабатывает вызов функции
+    fn process_call(
+        &mut self,
+        caller: NodeId,
+        call: &dc_core::parsers::Call,
+        current_file: &Path,
+    ) -> Result<NodeId> {
+        // Пытаемся найти функцию в текущем файле или других обработанных файлах
+        let callee_node = self.find_function_node(&call.name, current_file)
+            .unwrap_or_else(|| {
+                // Если функция не найдена, создаем виртуальный узел
+                self.get_or_create_function_node(&call.name, current_file)
+            });
+
+        let argument_mapping = call
+            .arguments
+            .iter()
+            .enumerate()
+            .map(|(idx, arg)| {
+                let key = arg
+                    .parameter_name
+                    .clone()
+                    .unwrap_or_else(|| format!("arg{}", idx));
+                (key, arg.value.clone())
+            })
+            .collect();
+
+        self.graph.add_edge(
+            *caller,
+            *callee_node,
+            CallEdge::Call {
+                caller,
+                callee: callee_node,
+                argument_mapping,
+                location: call.location.clone(),
+            },
+        );
+
+        Ok(callee_node)
+    }
+
+    /// Получает или создает узел модуля
+    fn get_or_create_module_node(&mut self, path: &PathBuf) -> Result<NodeId> {
+        let normalized = Self::normalize_path(path);
+
+        if let Some(node) = self.module_nodes.get(&normalized) {
+            return Ok(*node);
+        }
+
+        let node = NodeId::from(self.graph.add_node(CallNode::Module {
+            path: normalized.clone(),
+        }));
+        self.module_nodes.insert(normalized, node);
+        Ok(node)
+    }
+
+    /// Получает или создает узел функции
+    fn get_or_create_function_node(&mut self, name: &str, file: &Path) -> NodeId {
+        self.get_or_create_function_node_with_details(name, file, 0, Vec::new(), None, false)
+    }
+
+    /// Получает или создает узел функции с деталями
+    fn get_or_create_function_node_with_details(
+        &mut self,
+        name: &str,
+        file: &Path,
+        line: usize,
+        parameters: Vec<dc_core::call_graph::Parameter>,
+        return_type: Option<dc_core::models::TypeInfo>,
+        _is_async: bool,
+    ) -> NodeId {
+        let key = Self::function_key(file, name);
+
+        if let Some(node) = self.function_nodes.get(&key) {
+            return *node;
+        }
+
+        let node = NodeId::from(self.graph.add_node(CallNode::Function {
+            name: name.to_string(),
+            file: file.to_path_buf(),
+            line,
+            parameters,
+            return_type,
+        }));
+        self.function_nodes.insert(key, node);
+        node
+    }
+
+    /// Получает или создает узел класса
+    fn get_or_create_class_node(&mut self, name: &str, file: &Path, _line: usize) -> NodeId {
+        let _key = format!("{}::class::{}", Self::normalize_path(file).to_string_lossy(), name);
+        
+        // Проверяем, есть ли уже узел класса
+        for (node_idx, node) in self.graph.node_indices().zip(self.graph.node_weights()) {
+            if let CallNode::Class { name: node_name, .. } = node {
+                if node_name == name {
+                    return NodeId::from(node_idx);
+                }
+            }
+        }
+
+        let node = NodeId::from(self.graph.add_node(CallNode::Class {
+            name: name.to_string(),
+            file: file.to_path_buf(),
+            methods: Vec::new(),
+        }));
+        node
+    }
+
+    /// Получает или создает узел метода
+    fn get_or_create_method_node(
+        &mut self,
+        name: &str,
+        class: NodeId,
+        file: &Path,
+        _line: usize,
+        parameters: Vec<dc_core::call_graph::Parameter>,
+        return_type: Option<dc_core::models::TypeInfo>,
+        _is_async: bool,
+        _is_static: bool,
+    ) -> NodeId {
+        let _key = format!("{}::method::{}", Self::normalize_path(file).to_string_lossy(), name);
+        
+        // Проверяем, есть ли уже узел метода
+        for (node_idx, node) in self.graph.node_indices().zip(self.graph.node_weights()) {
+            if let CallNode::Method { name: node_name, class: node_class, .. } = node {
+                if node_name == name && *node_class == class {
+                    return NodeId::from(node_idx);
+                }
+            }
+        }
+
+        let node = NodeId::from(self.graph.add_node(CallNode::Method {
+            name: name.to_string(),
+            class,
+            parameters,
+            return_type,
+        }));
+        
+        // Обновляем список методов класса
+        if let Some(class_node) = self.graph.node_weight_mut(*class) {
+            if let CallNode::Class { methods, .. } = class_node {
+                methods.push(node);
+            }
+        }
+        
+        node
+    }
+
+    /// Находит узел функции
+    fn find_function_node(&self, name: &str, current_file: &Path) -> Option<NodeId> {
+        let normalized = Self::normalize_path(current_file);
+        let direct_key = Self::function_key(&normalized, name);
+        if let Some(node) = self.function_nodes.get(&direct_key) {
+            return Some(*node);
+        }
+
+        // Ищем по имени во всех файлах
+        self.function_nodes
+            .iter()
+            .find(|(key, _)| key.ends_with(&format!("::{}", name)))
+            .map(|(_, node)| *node)
+    }
+
+    /// Разрешает путь импорта
+    fn resolve_import_path(&self, import_path: &str, current_file: &Path) -> Result<PathBuf> {
+        let normalized_current = Self::normalize_path(current_file);
+        let base_dir = normalized_current
+            .parent()
+            .map(|p| p.to_path_buf())
+            .or_else(|| self.project_root.clone())
+            .unwrap_or_else(|| PathBuf::from("."));
+
+        let candidate = if import_path.starts_with('.') {
+            self.resolve_relative_import(import_path, &base_dir)
+        } else {
+            // Абсолютные импорты - пока пропускаем внешние модули
+            return Err(anyhow::anyhow!("External module: {}", import_path));
+        };
+
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+
+        // Пробуем добавить расширения
+        for ext in &["ts", "tsx", "js", "jsx"] {
+            let mut with_ext = candidate.clone();
+            with_ext.set_extension(ext);
+            if with_ext.exists() {
+                return Ok(with_ext);
+            }
+        }
+
+        anyhow::bail!(
+            "Cannot resolve import path {} from {:?}",
+            import_path,
+            current_file
+        )
+    }
+
+    /// Разрешает относительный импорт
+    fn resolve_relative_import(&self, import_path: &str, base_dir: &Path) -> PathBuf {
+        let mut level = 0;
+        for ch in import_path.chars() {
+            if ch == '.' {
+                level += 1;
+            } else {
+                break;
+            }
+        }
+
+        let mut path = base_dir.to_path_buf();
+        for _ in 1..level {
+            if let Some(parent) = path.parent() {
+                path = parent.to_path_buf();
+            }
+        }
+
+        let remaining = import_path.trim_start_matches('.');
+        if !remaining.is_empty() {
+            let replaced = remaining.replace('/', &std::path::MAIN_SEPARATOR.to_string());
+            path = path.join(replaced);
+        }
+
+        path
+    }
+
+    /// Нормализует путь
+    fn normalize_path(path: &Path) -> PathBuf {
+        path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+    }
+
+    /// Создает ключ для функции
+    fn function_key(path: &Path, name: &str) -> String {
+        format!("{}::{}", Self::normalize_path(path).to_string_lossy(), name)
     }
 
     fn find_ts_files(&self, dir: &PathBuf, files: &mut Vec<PathBuf>) -> Result<()> {

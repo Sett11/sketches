@@ -1,5 +1,4 @@
 use anyhow::Result;
-use chrono::Utc;
 use dc_core::models::DataChain;
 use std::fs;
 use std::path::Path;

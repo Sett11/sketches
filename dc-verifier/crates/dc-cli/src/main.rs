@@ -5,9 +5,6 @@ mod commands;
 mod config;
 mod reporters;
 
-use commands::*;
-use config::*;
-
 #[derive(Parser)]
 #[command(name = "dc-verifier")]
 #[command(about = "Data Chains Verifier - проверка целостности цепочек данных")]
@@ -23,6 +20,9 @@ enum Commands {
         /// Путь к конфигурационному файлу
         #[arg(short, long, default_value = "dc-verifier.toml")]
         config: String,
+        /// Формат отчета (markdown или json)
+        #[arg(short, long, default_value = "markdown")]
+        format: String,
     },
     /// Создание конфигурационного файла
     Init {
@@ -42,8 +42,8 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Check { config } => {
-            commands::check::execute_check(&config)?;
+        Commands::Check { config, format } => {
+            commands::check::execute_check(&config, &format)?;
         }
         Commands::Init { path } => {
             commands::init::execute_init(&path)?;

@@ -1,15 +1,13 @@
 use anyhow::Result;
-use chrono::Utc;
 use dc_core::models::DataChain;
-use serde_json::to_string_pretty;
 use std::fs;
 use std::path::Path;
 
-/// Генератор JSON отчетов
+/// JSON report generator
 pub struct JsonReporter;
 
 impl JsonReporter {
-    /// Генерирует JSON отчет
+    /// Generates a JSON report
     pub fn generate(&self, chains: &[DataChain], output_path: &str) -> Result<()> {
         let report = serde_json::json!({
             "version": "1.0.0",
