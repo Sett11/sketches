@@ -24,8 +24,35 @@ impl PydanticExtractor {
     }
 
     /// Extracts a Pydantic model from a function parameter
-    pub fn extract_from_parameter(&self, param: &Bound<'_, PyAny>) -> Option<SchemaReference> {
+    ///
+    /// Attempts to automatically determine the file path using `inspect.getfile()`.
+    /// If `file_path` is provided, it will be used as a fallback if `inspect.getfile()` fails.
+    /// If both methods fail, an empty string will be used for the file path.
+    ///
+    /// # Arguments
+    /// * `param` - The Python parameter object (can be a Pydantic model class or instance)
+    /// * `file_path` - Optional file path to use if automatic detection fails
+    pub fn extract_from_parameter(
+        &self,
+        param: &Bound<'_, PyAny>,
+        file_path: Option<&str>,
+    ) -> Option<SchemaReference> {
         let py = param.py();
+
+        // Try to get file path from Python object using inspect.getfile
+        let resolved_file_path = if let Some(fp) = file_path {
+            fp.to_string()
+        } else {
+            // Attempt to get file path from Python object
+            let inspect = py.import("inspect").ok()?;
+            let getfile = inspect.getattr("getfile").ok()?;
+            getfile
+                .call1((param,))
+                .ok()
+                .and_then(|file_obj| file_obj.extract::<String>().ok())
+                .unwrap_or_default()
+        };
+
         // Parameter can be:
         // 1. A Pydantic model class (type annotation)
         // 2. An instance of a Pydantic model
@@ -110,7 +137,7 @@ impl PydanticExtractor {
             name,
             schema_type: SchemaType::Pydantic,
             location: Location {
-                file: String::new(), // File will be set later
+                file: resolved_file_path,
                 line: 0,
                 column: None,
             },

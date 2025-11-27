@@ -36,7 +36,7 @@ enum Commands {
         #[arg(default_value = "dc-verifier.toml")]
         path: String,
     },
-    /// Visualize graphs (optional)
+    /// Visualize data chain graphs
     Visualize {
         /// Path to configuration file
         #[arg(short, long, default_value = "dc-verifier.toml")]
